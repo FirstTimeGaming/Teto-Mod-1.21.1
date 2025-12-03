@@ -1,7 +1,13 @@
 package net.firsttimegaming.tetomod;
 
+import net.firsttimegaming.tetomod.block.ModBlocks;
+import net.firsttimegaming.tetomod.block.entity.ModBlockEntities;
+import net.firsttimegaming.tetomod.item.ModCreativeModeTabs;
+import net.firsttimegaming.tetomod.item.ModItems;
+import net.firsttimegaming.tetomod.screen.ModMenuTypes;
+import net.firsttimegaming.tetomod.screen.PlushScreen;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import org.slf4j.Logger;
-
 import com.mojang.logging.LogUtils;
 
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -54,6 +60,13 @@ public class TetoMod {
         // Do not add this line if there are no @SubscribeEvent-annotated functions in this class, like onServerStarting() below.
         NeoForge.EVENT_BUS.register(this);
 
+        ModCreativeModeTabs.register(modEventBus);
+        ModItems.register(modEventBus);
+        ModBlocks.register(modEventBus);
+        ModBlockEntities.register(modEventBus);
+        ModMenuTypes.register(modEventBus);
+
+
         // Register the item to a creative tab
         modEventBus.addListener(this::addCreative);
 
@@ -82,6 +95,11 @@ public class TetoMod {
         @SubscribeEvent
         static void onClientSetup(FMLClientSetupEvent event) {
 
+        }
+
+        @SubscribeEvent
+        public static void registerScreens(RegisterMenuScreensEvent event) {
+            event.register(ModMenuTypes.PLUSH_MENU.get(), PlushScreen::new);
         }
     }
 }
