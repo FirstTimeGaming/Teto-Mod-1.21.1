@@ -3,6 +3,7 @@ package net.firsttimegaming.tetomod.client.widget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 
@@ -229,6 +230,11 @@ public class DropdownWidget extends AbstractWidget {
 
     @Override
     protected void updateWidgetNarration(NarrationElementOutput narrationElementOutput) {
-        this.defaultButtonNarrationText(narrationElementOutput);
+        narrationElementOutput.add(NarratedElementType.TITLE, this.getMessage());
+        if (!options.isEmpty() && selectedIndex >= 0 && selectedIndex < options.size()) {
+            narrationElementOutput.add(NarratedElementType.USAGE,
+                    Component.literal("Selected: " + options.get(selectedIndex).getString() +
+                            ". " + (open ? "Press to close dropdown" : "Press to open dropdown")));
+        }
     }
 }

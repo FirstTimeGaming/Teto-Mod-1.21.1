@@ -222,7 +222,7 @@ public class PlushMenu extends AbstractContainerMenu {
                 return ItemStack.EMPTY;
             }
         } else {
-            TetoMod.LOGGER.warn("Invalid slot index: {}", pIndex);
+            TetoMod.LOGGER.debug("Unexpected slot index in quickMoveStack: {}", pIndex);
             return ItemStack.EMPTY;
         }
 
