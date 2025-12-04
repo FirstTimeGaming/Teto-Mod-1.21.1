@@ -2,6 +2,7 @@ package net.firsttimegaming.tetomod;
 
 import net.firsttimegaming.tetomod.block.ModBlocks;
 import net.firsttimegaming.tetomod.block.entity.ModBlockEntities;
+import net.firsttimegaming.tetomod.config.PlushTierConfigManager;
 import net.firsttimegaming.tetomod.item.ModCreativeModeTabs;
 import net.firsttimegaming.tetomod.item.ModItems;
 import net.firsttimegaming.tetomod.screen.ModMenuTypes;
@@ -65,6 +66,8 @@ public class TetoMod {
         ModBlocks.register(modEventBus);
         ModBlockEntities.register(modEventBus);
         ModMenuTypes.register(modEventBus);
+
+        PlushTierConfigManager.load();
 
 
         // Register the item to a creative tab
