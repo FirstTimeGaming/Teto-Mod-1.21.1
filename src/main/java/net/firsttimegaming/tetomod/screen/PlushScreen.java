@@ -32,6 +32,8 @@ import java.util.Locale;
  */
 public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
 
+    // ==================== Class Variables ====================
+
     /** The GUI background texture resource location. */
     private static final ResourceLocation GUI_TEXTURE =
             ResourceLocation.fromNamespaceAndPath(TetoMod.MOD_ID, "textures/gui/plush/place_holder_gui.png");
@@ -120,6 +122,8 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
     /** The tier selection dropdown widget. */
     private DropdownWidget tierDropdown;
 
+    // ==================== Constructor ====================
+
     /**
      * Constructs a new PlushScreen.
      *
@@ -133,55 +137,7 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         this.imageHeight = GUI_HEIGHT;
     }
 
-    @Override
-    protected void init() {
-        super.init();
-
-        int left = this.leftPos;
-        int top = this.topPos;
-
-        String titleText = this.title.getString();
-        int titleWidth = this.font.width(titleText);
-
-        int dropdownX = left + TITLE_X + titleWidth + DROPDOWN_X_OFFSET;
-        int dropdownY = top + DROPDOWN_Y_OFFSET;
-
-        this.tierDropdown = new DropdownWidget(
-                dropdownX,
-                dropdownY,
-                DROPDOWN_WIDTH,
-                DROPDOWN_HEIGHT,
-                List.of(
-                        Component.literal("Tier 1"),
-                        Component.literal("Tier 2"),
-                        Component.literal("Tier 3"),
-                        Component.literal("Tier 4"),
-                        Component.literal("Tier 5")
-                ),
-                this::onTierSelected
-        );
-
-        int beTier = this.menu.blockEntity.getSelectedTier();
-        beTier = Math.max(0, Math.min(beTier, MAX_TIER_INDEX));
-        this.tierDropdown.setSelectedIndex(beTier);
-
-        int submitSlotX = left + SUBMIT_SLOT_GUI_X;
-        int submitSlotY = top + SUBMIT_SLOT_GUI_Y - BUTTON_Y_ADJUST;
-
-        this.addRenderableWidget(
-                Button.builder(Component.literal("R"), b -> onRefreshClicked())
-                        .bounds(submitSlotX - BUTTON_OFFSET, submitSlotY, BUTTON_SIZE, BUTTON_SIZE)
-                        .build()
-        );
-
-        this.addRenderableWidget(
-                Button.builder(Component.literal("✓"), b -> onSubmitClicked())
-                        .bounds(submitSlotX + BUTTON_SIZE, submitSlotY, BUTTON_SIZE, BUTTON_SIZE)
-                        .build()
-        );
-
-        this.addRenderableWidget(this.tierDropdown);
-    }
+    // ==================== Custom Methods ====================
 
     /**
      * Handles the refresh button click.
@@ -389,6 +345,58 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         int completedPrev = this.menu.blockEntity.getTierCompletions(prevTierIndex);
 
         return completedPrev >= required;
+    }
+
+    // ==================== Overridden Methods ====================
+
+    @Override
+    protected void init() {
+        super.init();
+
+        int left = this.leftPos;
+        int top = this.topPos;
+
+        String titleText = this.title.getString();
+        int titleWidth = this.font.width(titleText);
+
+        int dropdownX = left + TITLE_X + titleWidth + DROPDOWN_X_OFFSET;
+        int dropdownY = top + DROPDOWN_Y_OFFSET;
+
+        this.tierDropdown = new DropdownWidget(
+                dropdownX,
+                dropdownY,
+                DROPDOWN_WIDTH,
+                DROPDOWN_HEIGHT,
+                List.of(
+                        Component.literal("Tier 1"),
+                        Component.literal("Tier 2"),
+                        Component.literal("Tier 3"),
+                        Component.literal("Tier 4"),
+                        Component.literal("Tier 5")
+                ),
+                this::onTierSelected
+        );
+
+        int beTier = this.menu.blockEntity.getSelectedTier();
+        beTier = Math.max(0, Math.min(beTier, MAX_TIER_INDEX));
+        this.tierDropdown.setSelectedIndex(beTier);
+
+        int submitSlotX = left + SUBMIT_SLOT_GUI_X;
+        int submitSlotY = top + SUBMIT_SLOT_GUI_Y - BUTTON_Y_ADJUST;
+
+        this.addRenderableWidget(
+                Button.builder(Component.literal("R"), b -> onRefreshClicked())
+                        .bounds(submitSlotX - BUTTON_OFFSET, submitSlotY, BUTTON_SIZE, BUTTON_SIZE)
+                        .build()
+        );
+
+        this.addRenderableWidget(
+                Button.builder(Component.literal("✓"), b -> onSubmitClicked())
+                        .bounds(submitSlotX + BUTTON_SIZE, submitSlotY, BUTTON_SIZE, BUTTON_SIZE)
+                        .build()
+        );
+
+        this.addRenderableWidget(this.tierDropdown);
     }
 
     @Override

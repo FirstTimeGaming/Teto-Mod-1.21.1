@@ -42,6 +42,8 @@ import java.util.Map;
  */
 public class PlushBlockEntity extends BlockEntity implements MenuProvider {
 
+    // ==================== Class Variables ====================
+
     /** The maximum number of tiers available in the plush system (0-indexed: 0 to MAX_TIER-1). */
     public static final int MAX_TIER = 5;
 
@@ -121,6 +123,8 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         }
     };
 
+    // ==================== Constructor ====================
+
     /**
      * Constructs a new PlushBlockEntity at the specified position.
      *
@@ -130,6 +134,8 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
     public PlushBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.PLUSH_BLOCK_ENTITY.get(), pos, blockState);
     }
+
+    // ==================== Getter Methods ====================
 
     /**
      * Gets the currently selected tier index.
@@ -148,6 +154,82 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
     public PlushTierConfig getCurrentTierConfig() {
         return PlushTierConfigManager.getTierConfig(this.selectedTier);
     }
+
+    /**
+     * Gets the number of times the specified tier has been completed.
+     *
+     * @param tierIndex the tier index (0-based)
+     * @return the completion count for the tier
+     */
+    public int getTierCompletions(int tierIndex) {
+        return tierCompletions.getOrDefault(tierIndex, 0);
+    }
+
+    /**
+     * Gets how many times the specified tier has been completed for this block.
+     *
+     * @param tierIndex the tier index (0-based)
+     * @return the number of completions
+     */
+    public int getTimesCompleted(int tierIndex) {
+        return tierCompletions.getOrDefault(tierIndex, 0);
+    }
+
+    /**
+     * Gets how many times the currently selected tier has been completed.
+     *
+     * @return the number of completions for the current tier
+     */
+    public int getTimesCompletedForCurrentTier() {
+        return getTimesCompleted(this.selectedTier);
+    }
+
+    /**
+     * Gets a random reward from the current tier's reward pool.
+     *
+     * @return the reward ItemStack, or empty if no valid reward could be selected
+     */
+    public ItemStack getRandomRewardForCurrentTier() {
+        PlushTierConfig tierCfg = PlushTierConfigManager.getTierConfig(this.selectedTier);
+        RandomSource random = (level != null ? level.random : RandomSource.create());
+        PlushItemEntry entry = WeightedRandomUtils.pickWeighted(tierCfg.itemsToReceive, random);
+        return ItemStackUtils.toStack(entry);
+    }
+
+    // ==================== Setter Methods ====================
+
+    /**
+     * Sets the currently selected tier, clamping to valid range.
+     * <p>
+     * When changing tiers, this will either restore a cached reward for that tier
+     * or roll a new one if none is cached.
+     *
+     * @param tier the tier index to select (will be clamped to 0 to MAX_TIER-1)
+     */
+    public void setSelectedTier(int tier) {
+        tier = Math.max(0, Math.min(tier, MAX_TIER - 1));
+
+        if (this.selectedTier != tier) {
+            this.selectedTier = tier;
+
+            if (level != null && !level.isClientSide()) {
+                PlushItemEntry existingItem = cachedRewards.get(selectedTier);
+                if (existingItem == null) {
+                    rollRandomRewardIntoSlot0();
+                } else {
+                    ItemStack stack = ItemStackUtils.toStack(existingItem);
+                    inventory.setStackInSlot(SLOT_REQUIREMENT, stack);
+                }
+            }
+
+            setChanged();
+            if (level != null && !level.isClientSide()) {
+                level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
+            }
+        }
+    }
+
+    // ==================== Custom Methods ====================
 
     /**
      * Rolls a random required item from the current tier's item pool and places it in the requirement slot.
@@ -183,37 +265,6 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         }
 
         Containers.dropContents(this.level, this.worldPosition, inv);
-    }
-
-    /**
-     * Sets the currently selected tier, clamping to valid range.
-     * <p>
-     * When changing tiers, this will either restore a cached reward for that tier
-     * or roll a new one if none is cached.
-     *
-     * @param tier the tier index to select (will be clamped to 0 to MAX_TIER-1)
-     */
-    public void setSelectedTier(int tier) {
-        tier = Math.max(0, Math.min(tier, MAX_TIER - 1));
-
-        if (this.selectedTier != tier) {
-            this.selectedTier = tier;
-
-            if (level != null && !level.isClientSide()) {
-                PlushItemEntry existingItem = cachedRewards.get(selectedTier);
-                if (existingItem == null) {
-                    rollRandomRewardIntoSlot0();
-                } else {
-                    ItemStack stack = ItemStackUtils.toStack(existingItem);
-                    inventory.setStackInSlot(SLOT_REQUIREMENT, stack);
-                }
-            }
-
-            setChanged();
-            if (level != null && !level.isClientSide()) {
-                level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
-            }
-        }
     }
 
     /**
@@ -285,16 +336,6 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
     }
 
     /**
-     * Gets the number of times the specified tier has been completed.
-     *
-     * @param tierIndex the tier index (0-based)
-     * @return the completion count for the tier
-     */
-    public int getTierCompletions(int tierIndex) {
-        return tierCompletions.getOrDefault(tierIndex, 0);
-    }
-
-    /**
      * Increments the completion count for the specified tier.
      *
      * @param tier the tier index to increment (0-based)
@@ -347,15 +388,132 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
     }
 
     /**
-     * Gets a random reward from the current tier's reward pool.
-     *
-     * @return the reward ItemStack, or empty if no valid reward could be selected
+     * Marks the current tier as completed.
+     * <p>
+     * This increments the completion count and clears the cached reward,
+     * so the next usage of this tier will roll a new reward.
      */
-    public ItemStack getRandomRewardForCurrentTier() {
-        PlushTierConfig tierCfg = PlushTierConfigManager.getTierConfig(this.selectedTier);
-        RandomSource random = (level != null ? level.random : RandomSource.create());
-        PlushItemEntry entry = WeightedRandomUtils.pickWeighted(tierCfg.itemsToReceive, random);
-        return ItemStackUtils.toStack(entry);
+    public void markCurrentTierCompleted() {
+        int current = tierCompletions.getOrDefault(selectedTier, 0);
+        tierCompletions.put(selectedTier, current + 1);
+
+        cachedRewards.remove(selectedTier);
+
+        setChanged();
+        if (level != null && !level.isClientSide()) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
+        }
+    }
+
+    /**
+     * Ensures a reward is cached and displayed for the current tier.
+     * If no cached reward exists, a new one is rolled.
+     */
+    public void ensureRewardForCurrentTier() {
+        if (level == null || level.isClientSide()) {
+            return;
+        }
+
+        PlushItemEntry cached = cachedRewards.get(selectedTier);
+        if (cached == null) {
+            cached = rollRandomRewardForCurrentTier();
+            if (cached != null) {
+                cachedRewards.put(selectedTier, cached);
+                setChanged();
+            }
+        }
+
+        ItemStack stack = ItemStackUtils.toStack(cached);
+        inventory.setStackInSlot(SLOT_REQUIREMENT, stack);
+
+        level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
+    }
+
+    /**
+     * Rolls a random reward entry for the current tier using weighted selection.
+     * Entries with weight <= 0 are treated as having weight 1.
+     *
+     * @return the selected entry, or null if no valid entry could be selected
+     */
+    @Nullable
+    private PlushItemEntry rollRandomRewardForCurrentTier() {
+        if (level == null) {
+            return null;
+        }
+
+        PlushTierConfig tierConfig = getCurrentTierConfig();
+        List<PlushItemEntry> pool = tierConfig.itemsToGive;
+
+        PlushItemEntry selected = pickWeightedWithMinWeight(pool);
+        return WeightedRandomUtils.copyEntry(selected);
+    }
+
+    /**
+     * Picks a weighted entry from the list, treating entries with weight <= 0 as weight 1.
+     *
+     * @param pool the list of entries to select from
+     * @return the selected entry, or null if pool is empty
+     */
+    @Nullable
+    private PlushItemEntry pickWeightedWithMinWeight(List<PlushItemEntry> pool) {
+        if (pool == null || pool.isEmpty()) {
+            return null;
+        }
+
+        int totalWeight = 0;
+        for (PlushItemEntry entry : pool) {
+            int w = Math.max(1, entry.weight);
+            totalWeight += w;
+        }
+
+        if (totalWeight <= 0 || level == null) {
+            return null;
+        }
+
+        int roll = level.random.nextInt(totalWeight);
+        int cumulative = 0;
+        for (PlushItemEntry entry : pool) {
+            int w = Math.max(1, entry.weight);
+            cumulative += w;
+            if (roll < cumulative) {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    // ==================== Overridden Methods ====================
+
+    @Override
+    public Component getDisplayName() {
+        return Component.literal("Teto");
+    }
+
+    @Override
+    public @Nullable AbstractContainerMenu createMenu(int i, Inventory inventory, Player player) {
+        if (level != null && !level.isClientSide()) {
+            ensureRewardForCurrentTier();
+        }
+        return new PlushMenu(i, inventory, this);
+    }
+
+    @Nullable
+    @Override
+    public ClientboundBlockEntityDataPacket getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    @Override
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        CompoundTag tag = new CompoundTag();
+        saveAdditional(tag, registries);
+        return tag;
+    }
+
+    @Override
+    public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
+        loadAdditional(tag, registries);
     }
 
     @Override
@@ -428,168 +586,5 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
                 }
             }
         }
-    }
-
-    /**
-     * Gets how many times the specified tier has been completed for this block.
-     *
-     * @param tierIndex the tier index (0-based)
-     * @return the number of completions
-     */
-    public int getTimesCompleted(int tierIndex) {
-        return tierCompletions.getOrDefault(tierIndex, 0);
-    }
-
-    /**
-     * Gets how many times the currently selected tier has been completed.
-     *
-     * @return the number of completions for the current tier
-     */
-    public int getTimesCompletedForCurrentTier() {
-        return getTimesCompleted(this.selectedTier);
-    }
-
-    /**
-     * Marks the current tier as completed.
-     * <p>
-     * This increments the completion count and clears the cached reward,
-     * so the next usage of this tier will roll a new reward.
-     */
-    public void markCurrentTierCompleted() {
-        int current = tierCompletions.getOrDefault(selectedTier, 0);
-        tierCompletions.put(selectedTier, current + 1);
-
-        cachedRewards.remove(selectedTier);
-
-        setChanged();
-        if (level != null && !level.isClientSide()) {
-            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
-        }
-    }
-
-    /**
-     * Rolls a random reward entry for the current tier using weighted selection.
-     * Entries with weight <= 0 are treated as having weight 1.
-     *
-     * @return the selected entry, or null if no valid entry could be selected
-     */
-    @Nullable
-    private PlushItemEntry rollRandomRewardForCurrentTier() {
-        if (level == null) {
-            return null;
-        }
-
-        PlushTierConfig tierConfig = getCurrentTierConfig();
-        List<PlushItemEntry> pool = tierConfig.itemsToGive;
-
-        PlushItemEntry selected = pickWeightedWithMinWeight(pool);
-        return WeightedRandomUtils.copyEntry(selected);
-    }
-
-    /**
-     * Ensures a reward is cached and displayed for the current tier.
-     * If no cached reward exists, a new one is rolled.
-     */
-    public void ensureRewardForCurrentTier() {
-        if (level == null || level.isClientSide()) {
-            return;
-        }
-
-        PlushItemEntry cached = cachedRewards.get(selectedTier);
-        if (cached == null) {
-            cached = rollRandomRewardForCurrentTier();
-            if (cached != null) {
-                cachedRewards.put(selectedTier, cached);
-                setChanged();
-            }
-        }
-
-        ItemStack stack = ItemStackUtils.toStack(cached);
-        inventory.setStackInSlot(SLOT_REQUIREMENT, stack);
-
-        level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
-    }
-
-    /**
-     * Picks a weighted entry from the list, treating entries with weight <= 0 as weight 1.
-     *
-     * @param pool the list of entries to select from
-     * @return the selected entry, or null if pool is empty
-     */
-    @Nullable
-    private PlushItemEntry pickWeightedWithMinWeight(List<PlushItemEntry> pool) {
-        if (pool == null || pool.isEmpty()) {
-            return null;
-        }
-
-        int totalWeight = 0;
-        for (PlushItemEntry entry : pool) {
-            int w = Math.max(1, entry.weight);
-            totalWeight += w;
-        }
-
-        if (totalWeight <= 0 || level == null) {
-            return null;
-        }
-
-        int roll = level.random.nextInt(totalWeight);
-        int cumulative = 0;
-        for (PlushItemEntry entry : pool) {
-            int w = Math.max(1, entry.weight);
-            cumulative += w;
-            if (roll < cumulative) {
-                return entry;
-            }
-        }
-
-        return null;
-    }
-
-    @Override
-    public Component getDisplayName() {
-        return Component.literal("Teto");
-    }
-
-    @Override
-    public @Nullable AbstractContainerMenu createMenu(int i, Inventory inventory, Player player) {
-        if (level != null && !level.isClientSide()) {
-            ensureRewardForCurrentTier();
-        }
-        return new PlushMenu(i, inventory, this);
-    }
-
-    /**
-     * Creates the packet for sending block entity data to the client.
-     *
-     * @return the update packet
-     */
-    @Nullable
-    @Override
-    public ClientboundBlockEntityDataPacket getUpdatePacket() {
-        return ClientboundBlockEntityDataPacket.create(this);
-    }
-
-    /**
-     * Creates the tag to send to the client when the chunk is loaded or updated.
-     *
-     * @param registries the registry lookup provider
-     * @return the compound tag containing the block entity data
-     */
-    @Override
-    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
-        CompoundTag tag = new CompoundTag();
-        saveAdditional(tag, registries);
-        return tag;
-    }
-
-    /**
-     * Handles applying the update tag received from the server.
-     *
-     * @param tag        the compound tag containing the block entity data
-     * @param registries the registry lookup provider
-     */
-    @Override
-    public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
-        loadAdditional(tag, registries);
     }
 }

@@ -17,6 +17,8 @@ import java.util.function.Consumer;
  */
 public class DropdownWidget extends AbstractWidget {
 
+    // ==================== Class Variables ====================
+
     /** Background color for the dropdown (light grey). */
     private static final int COLOR_BACKGROUND = 0xFFCCCCCC;
 
@@ -59,6 +61,8 @@ public class DropdownWidget extends AbstractWidget {
     /** Whether the dropdown is currently expanded. */
     private boolean open = false;
 
+    // ==================== Constructor ====================
+
     /**
      * Constructs a new DropdownWidget.
      *
@@ -77,22 +81,7 @@ public class DropdownWidget extends AbstractWidget {
         this.onSelectionChanged = onSelectionChanged;
     }
 
-    /**
-     * Draws a border around the specified rectangle.
-     *
-     * @param g     the graphics context
-     * @param x1    left edge
-     * @param y1    top edge
-     * @param x2    right edge
-     * @param y2    bottom edge
-     * @param color the border color
-     */
-    private void drawBorder(GuiGraphics g, int x1, int y1, int x2, int y2, int color) {
-        g.fill(x1, y1, x2, y1 + BORDER_THICKNESS, color);
-        g.fill(x1, y2 - BORDER_THICKNESS, x2, y2, color);
-        g.fill(x1, y1, x1 + BORDER_THICKNESS, y2, color);
-        g.fill(x2 - BORDER_THICKNESS, y1, x2, y2, color);
-    }
+    // ==================== Getter Methods ====================
 
     /**
      * Gets the currently selected option index.
@@ -101,21 +90,6 @@ public class DropdownWidget extends AbstractWidget {
      */
     public int getSelectedIndex() {
         return selectedIndex;
-    }
-
-    /**
-     * Sets the selected option index.
-     *
-     * @param index the index to select
-     */
-    public void setSelectedIndex(int index) {
-        if (index >= 0 && index < options.size()) {
-            this.selectedIndex = index;
-            this.setMessage(options.get(index));
-            if (onSelectionChanged != null) {
-                onSelectionChanged.accept(index);
-            }
-        }
     }
 
     /**
@@ -136,12 +110,50 @@ public class DropdownWidget extends AbstractWidget {
         return open;
     }
 
+    // ==================== Setter Methods ====================
+
+    /**
+     * Sets the selected option index.
+     *
+     * @param index the index to select
+     */
+    public void setSelectedIndex(int index) {
+        if (index >= 0 && index < options.size()) {
+            this.selectedIndex = index;
+            this.setMessage(options.get(index));
+            if (onSelectionChanged != null) {
+                onSelectionChanged.accept(index);
+            }
+        }
+    }
+
+    // ==================== Custom Methods ====================
+
     /**
      * Closes the dropdown.
      */
     public void close() {
         this.open = false;
     }
+
+    /**
+     * Draws a border around the specified rectangle.
+     *
+     * @param g     the graphics context
+     * @param x1    left edge
+     * @param y1    top edge
+     * @param x2    right edge
+     * @param y2    bottom edge
+     * @param color the border color
+     */
+    private void drawBorder(GuiGraphics g, int x1, int y1, int x2, int y2, int color) {
+        g.fill(x1, y1, x2, y1 + BORDER_THICKNESS, color);
+        g.fill(x1, y2 - BORDER_THICKNESS, x2, y2, color);
+        g.fill(x1, y1, x1 + BORDER_THICKNESS, y2, color);
+        g.fill(x2 - BORDER_THICKNESS, y1, x2, y2, color);
+    }
+
+    // ==================== Overridden Methods ====================
 
     @Override
     protected void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {

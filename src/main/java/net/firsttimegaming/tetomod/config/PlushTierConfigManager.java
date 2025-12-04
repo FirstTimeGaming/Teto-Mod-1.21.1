@@ -23,6 +23,8 @@ import java.nio.file.Path;
  */
 public final class PlushTierConfigManager {
 
+    // ==================== Class Variables ====================
+
     /** GSON instance for JSON serialization/deserialization. */
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -42,9 +44,69 @@ public final class PlushTierConfigManager {
     /** The loaded configuration root. */
     private static PlushConfigRoot ROOT;
 
+    // ==================== Constructor ====================
+
     private PlushTierConfigManager() {
         // Utility class - prevent instantiation
     }
+
+    // ==================== Getter Methods ====================
+
+    /**
+     * Gets the full configuration root.
+     *
+     * @return the configuration root, loading it if necessary
+     */
+    public static PlushConfigRoot getRoot() {
+        if (ROOT == null) {
+            load();
+        }
+        return ROOT;
+    }
+
+    /**
+     * Gets the configuration for a specific tier.
+     *
+     * @param tierIndex the tier index (0-based: 0 = tier 1, 1 = tier 2, etc.)
+     * @return the tier configuration, creating an empty one if missing
+     */
+    public static PlushTierConfig getTierConfig(int tierIndex) {
+        if (ROOT == null) {
+            load();
+        }
+
+        int idx = Math.max(0, Math.min(tierIndex, PlushBlockEntity.MAX_TIER - 1));
+        String key = TIER_KEY_PREFIX + (idx + 1);
+
+        PlushTierConfig tier = ROOT.tiers.get(key);
+        if (tier == null) {
+            tier = new PlushTierConfig();
+            ROOT.tiers.put(key, tier);
+        }
+        return tier;
+    }
+
+    /**
+     * Gets the number of previous tier completions required to unlock a tier.
+     *
+     * @param tierIndex the tier index (0-based)
+     * @return the required completions of the previous tier, or 0 if always available
+     */
+    public static int getRequiredCompletionsForTier(int tierIndex) {
+        if (ROOT == null) {
+            load();
+        }
+
+        int idx = Math.max(0, Math.min(tierIndex, PlushBlockEntity.MAX_TIER - 1));
+        String key = TIER_KEY_PREFIX + (idx + 1);
+
+        if (ROOT.tierLocks == null) {
+            return 0;
+        }
+        return ROOT.tierLocks.getOrDefault(key, 0);
+    }
+
+    // ==================== Custom Methods ====================
 
     /**
      * Loads the configuration from disk or creates a default configuration if none exists.
@@ -186,59 +248,5 @@ public final class PlushTierConfigManager {
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:netherite_ingot", 2, 2));
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:dragon_egg", 1, 1));
         return tier;
-    }
-
-    /**
-     * Gets the full configuration root.
-     *
-     * @return the configuration root, loading it if necessary
-     */
-    public static PlushConfigRoot getRoot() {
-        if (ROOT == null) {
-            load();
-        }
-        return ROOT;
-    }
-
-    /**
-     * Gets the configuration for a specific tier.
-     *
-     * @param tierIndex the tier index (0-based: 0 = tier 1, 1 = tier 2, etc.)
-     * @return the tier configuration, creating an empty one if missing
-     */
-    public static PlushTierConfig getTierConfig(int tierIndex) {
-        if (ROOT == null) {
-            load();
-        }
-
-        int idx = Math.max(0, Math.min(tierIndex, PlushBlockEntity.MAX_TIER - 1));
-        String key = TIER_KEY_PREFIX + (idx + 1);
-
-        PlushTierConfig tier = ROOT.tiers.get(key);
-        if (tier == null) {
-            tier = new PlushTierConfig();
-            ROOT.tiers.put(key, tier);
-        }
-        return tier;
-    }
-
-    /**
-     * Gets the number of previous tier completions required to unlock a tier.
-     *
-     * @param tierIndex the tier index (0-based)
-     * @return the required completions of the previous tier, or 0 if always available
-     */
-    public static int getRequiredCompletionsForTier(int tierIndex) {
-        if (ROOT == null) {
-            load();
-        }
-
-        int idx = Math.max(0, Math.min(tierIndex, PlushBlockEntity.MAX_TIER - 1));
-        String key = TIER_KEY_PREFIX + (idx + 1);
-
-        if (ROOT.tierLocks == null) {
-            return 0;
-        }
-        return ROOT.tierLocks.getOrDefault(key, 0);
     }
 }

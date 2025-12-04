@@ -13,9 +13,13 @@ import net.minecraft.world.item.Items;
  */
 public final class ItemStackUtils {
 
+    // ==================== Constructor ====================
+
     private ItemStackUtils() {
         // Utility class - prevent instantiation
     }
+
+    // ==================== Static Methods ====================
 
     /**
      * Converts a {@link PlushItemEntry} configuration object into an {@link ItemStack}.

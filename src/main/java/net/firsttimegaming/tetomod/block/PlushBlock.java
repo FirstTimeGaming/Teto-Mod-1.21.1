@@ -30,6 +30,8 @@ import org.jetbrains.annotations.Nullable;
  */
 public class PlushBlock extends BaseEntityBlock {
 
+    // ==================== Class Variables ====================
+
     /** Minimum X coordinate for the block shape in pixels (0-16 scale). */
     private static final double SHAPE_MIN_X = 4.0D;
 
@@ -60,6 +62,8 @@ public class PlushBlock extends BaseEntityBlock {
     /** Codec for serializing this block type. */
     public static final MapCodec<PlushBlock> CODEC = simpleCodec(PlushBlock::new);
 
+    // ==================== Constructor ====================
+
     /**
      * Constructs a new PlushBlock with the given properties.
      *
@@ -68,6 +72,8 @@ public class PlushBlock extends BaseEntityBlock {
     public PlushBlock(Properties properties) {
         super(properties);
     }
+
+    // ==================== Overridden Methods ====================
 
     @Override
     public @Nullable BlockEntity newBlockEntity(BlockPos blockPos, BlockState blockState) {

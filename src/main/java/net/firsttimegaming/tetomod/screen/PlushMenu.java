@@ -22,6 +22,8 @@ import net.neoforged.neoforge.items.SlotItemHandler;
  */
 public class PlushMenu extends AbstractContainerMenu {
 
+    // ==================== Class Variables ====================
+
     /** Button ID for rerolling the required item. */
     private static final int BUTTON_REROLL = 0;
 
@@ -91,6 +93,8 @@ public class PlushMenu extends AbstractContainerMenu {
     /** The level (world) this menu is in. */
     public final Level level;
 
+    // ==================== Constructors ====================
+
     /**
      * Constructs a PlushMenu from network data.
      * Used when opening the menu on the client side.
@@ -143,31 +147,7 @@ public class PlushMenu extends AbstractContainerMenu {
         });
     }
 
-    @Override
-    public boolean clickMenuButton(Player player, int id) {
-        if (id == BUTTON_REROLL) {
-            this.blockEntity.rollRandomRewardIntoSlot0();
-            return true;
-        }
-
-        if (id == BUTTON_SUBMIT) {
-            this.blockEntity.handleSubmit(player);
-            return true;
-        }
-
-        if (id >= BUTTON_TIER_BASE && id < BUTTON_TIER_MAX) {
-            int tier = id - BUTTON_TIER_BASE;
-
-            if (!this.blockEntity.canUseTier(tier, player)) {
-                return true;
-            }
-            this.blockEntity.setSelectedTier(tier);
-            this.blockEntity.setChanged();
-            return true;
-        }
-
-        return false;
-    }
+    // ==================== Custom Methods ====================
 
     /**
      * Adds the player's main inventory slots to the container.
@@ -195,6 +175,34 @@ public class PlushMenu extends AbstractContainerMenu {
             int x = INVENTORY_START_X + col * SLOT_SIZE;
             this.addSlot(new Slot(playerInventory, col, x, PLAYER_HOTBAR_Y));
         }
+    }
+
+    // ==================== Overridden Methods ====================
+
+    @Override
+    public boolean clickMenuButton(Player player, int id) {
+        if (id == BUTTON_REROLL) {
+            this.blockEntity.rollRandomRewardIntoSlot0();
+            return true;
+        }
+
+        if (id == BUTTON_SUBMIT) {
+            this.blockEntity.handleSubmit(player);
+            return true;
+        }
+
+        if (id >= BUTTON_TIER_BASE && id < BUTTON_TIER_MAX) {
+            int tier = id - BUTTON_TIER_BASE;
+
+            if (!this.blockEntity.canUseTier(tier, player)) {
+                return true;
+            }
+            this.blockEntity.setSelectedTier(tier);
+            this.blockEntity.setChanged();
+            return true;
+        }
+
+        return false;
     }
 
     @Override

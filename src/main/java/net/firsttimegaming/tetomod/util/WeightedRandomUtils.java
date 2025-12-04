@@ -12,9 +12,13 @@ import java.util.List;
  */
 public final class WeightedRandomUtils {
 
+    // ==================== Constructor ====================
+
     private WeightedRandomUtils() {
         // Utility class - prevent instantiation
     }
+
+    // ==================== Static Methods ====================
 
     /**
      * Selects a random {@link PlushItemEntry} from a weighted list.
