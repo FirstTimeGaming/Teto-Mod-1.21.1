@@ -11,20 +11,33 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.function.Supplier;
 
+/**
+ * Registry class for all mod creative mode tabs.
+ * <p>
+ * Creative mode tabs organize items in the creative inventory for easy access.
+ */
 public class ModCreativeModeTabs {
-    public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TAB = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, TetoMod.MOD_ID);
 
+    /** Deferred register for all creative mode tabs in this mod. */
+    public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TAB =
+            DeferredRegister.create(Registries.CREATIVE_MODE_TAB, TetoMod.MOD_ID);
+
+    /** The main Teto mod creative tab containing all mod items and blocks. */
     public static final Supplier<CreativeModeTab> TETO_TAB = CREATIVE_MODE_TAB.register("tetotab",
             () -> CreativeModeTab.builder()
                     .icon(() -> new ItemStack(ModBlocks.TETO_BLOCK.get()))
                     .title(Component.translatable("creativetab.tetomod.tetotab"))
-                    .displayItems(((itemDisplayParameters, output) -> {
+                    .displayItems((itemDisplayParameters, output) -> {
                         output.accept(new ItemStack(ModBlocks.TETO_BLOCK.get()));
-//                        output.accept(new ItemStack(ModItems.TETO_ITEM.get()));
-                    }))
+                    })
                     .build()
     );
 
+    /**
+     * Registers all creative mode tabs to the event bus.
+     *
+     * @param eventBus the mod event bus
+     */
     public static void register(IEventBus eventBus) {
         CREATIVE_MODE_TAB.register(eventBus);
     }

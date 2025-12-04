@@ -1,5 +1,6 @@
 package net.firsttimegaming.tetomod.screen;
 
+import net.firsttimegaming.tetomod.TetoMod;
 import net.firsttimegaming.tetomod.block.ModBlocks;
 import net.firsttimegaming.tetomod.block.entity.PlushBlockEntity;
 import net.minecraft.network.FriendlyByteBuf;
@@ -7,24 +8,108 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerLevelAccess;
-import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.items.SlotItemHandler;
 
-import javax.annotation.Nullable;
-
+/**
+ * Container menu for the Plush block interface.
+ * <p>
+ * Handles the interaction between the player inventory and the plush block's
+ * inventory slots for the tiered trading system.
+ */
 public class PlushMenu extends AbstractContainerMenu {
 
+    /** Button ID for rerolling the required item. */
+    private static final int BUTTON_REROLL = 0;
+
+    /** Button ID for submitting items. */
+    private static final int BUTTON_SUBMIT = 1;
+
+    /** Starting button ID for tier selection (tier 0 = 10, tier 1 = 11, etc.). */
+    private static final int BUTTON_TIER_BASE = 10;
+
+    /** Maximum button ID for tier selection (exclusive). */
+    private static final int BUTTON_TIER_MAX = 15;
+
+    /** X position for the requirement slot in the GUI. */
+    private static final int REQUIREMENT_SLOT_X = 10;
+
+    /** Y position for the requirement slot in the GUI. */
+    private static final int REQUIREMENT_SLOT_Y = 26;
+
+    /** X position for the submit slot in the GUI. */
+    private static final int SUBMIT_SLOT_X = 81;
+
+    /** Y position for the submit slot in the GUI. */
+    private static final int SUBMIT_SLOT_Y = 130;
+
+    /** Number of slots in the player hotbar. */
+    private static final int HOTBAR_SLOT_COUNT = 9;
+
+    /** Number of rows in the player inventory (excluding hotbar). */
+    private static final int PLAYER_INVENTORY_ROW_COUNT = 3;
+
+    /** Number of columns in the player inventory. */
+    private static final int PLAYER_INVENTORY_COLUMN_COUNT = 9;
+
+    /** Total number of slots in the player main inventory. */
+    private static final int PLAYER_INVENTORY_SLOT_COUNT = PLAYER_INVENTORY_COLUMN_COUNT * PLAYER_INVENTORY_ROW_COUNT;
+
+    /** Total number of vanilla player slots (hotbar + main inventory). */
+    private static final int VANILLA_SLOT_COUNT = HOTBAR_SLOT_COUNT + PLAYER_INVENTORY_SLOT_COUNT;
+
+    /** First slot index for vanilla inventory in the container. */
+    private static final int VANILLA_FIRST_SLOT_INDEX = 0;
+
+    /** First slot index for block entity inventory in the container. */
+    private static final int TE_INVENTORY_FIRST_SLOT_INDEX = VANILLA_FIRST_SLOT_INDEX + VANILLA_SLOT_COUNT;
+
+    /** Number of slots in the block entity inventory. */
+    private static final int TE_INVENTORY_SLOT_COUNT = 2;
+
+    /** Starting X position for inventory slots. */
+    private static final int INVENTORY_START_X = 9;
+
+    /** Slot size in pixels. */
+    private static final int SLOT_SIZE = 18;
+
+    /** Y offset for player inventory from the top of the GUI. */
+    public static final int INVENTORY_OFFSET_Y = 16 * 3 + 28;
+
+    /** Y position for the first row of player inventory. */
+    private static final int PLAYER_INVENTORY_START_Y = 84 + INVENTORY_OFFSET_Y;
+
+    /** Y position for the player hotbar. */
+    private static final int PLAYER_HOTBAR_Y = 142 + INVENTORY_OFFSET_Y;
+
+    /** The block entity this menu is connected to. */
     public final PlushBlockEntity blockEntity;
+
+    /** The level (world) this menu is in. */
     public final Level level;
 
+    /**
+     * Constructs a PlushMenu from network data.
+     * Used when opening the menu on the client side.
+     *
+     * @param containerId the container ID
+     * @param inv         the player inventory
+     * @param extraData   the network buffer containing the block position
+     */
     public PlushMenu(int containerId, Inventory inv, FriendlyByteBuf extraData) {
         this(containerId, inv, inv.player.level().getBlockEntity(extraData.readBlockPos()));
     }
 
+    /**
+     * Constructs a PlushMenu with the given block entity.
+     *
+     * @param containerId the container ID
+     * @param inv         the player inventory
+     * @param blockEntity the plush block entity
+     */
     public PlushMenu(int containerId, Inventory inv, BlockEntity blockEntity) {
         super(ModMenuTypes.PLUSH_MENU.get(), containerId);
         this.blockEntity = (PlushBlockEntity) blockEntity;
@@ -33,51 +118,47 @@ public class PlushMenu extends AbstractContainerMenu {
         addPlayerInventory(inv);
         addPlayerHotbar(inv);
 
-        this.addSlot(new SlotItemHandler(this.blockEntity.inventory, 0, 10, 26) {
+        this.addSlot(new SlotItemHandler(this.blockEntity.inventory, PlushBlockEntity.SLOT_REQUIREMENT, REQUIREMENT_SLOT_X, REQUIREMENT_SLOT_Y) {
             @Override
             public boolean mayPlace(ItemStack stack) {
                 return false;
-//                return stack.getDisplayName().getString().contains("Teto");
             }
 
+            @Override
             public boolean mayPickup(Player playerIn) {
                 return false;
             }
         });
 
-        // Slot 1 - submit slot (center small slot under the big area)
-        // tweak (x, y) if you want it perfectly aligned with your texture
-        this.addSlot(new SlotItemHandler(this.blockEntity.inventory, 1, 81, 130) {
+        this.addSlot(new SlotItemHandler(this.blockEntity.inventory, PlushBlockEntity.SLOT_SUBMIT, SUBMIT_SLOT_X, SUBMIT_SLOT_Y) {
             @Override
             public boolean mayPlace(ItemStack stack) {
-                return true; // allow putting stuff in to "submit"
+                return true;
             }
 
             @Override
             public boolean mayPickup(Player playerIn) {
-                return true; // you can pick it back up if you change your mind
+                return true;
             }
         });
     }
 
     @Override
     public boolean clickMenuButton(Player player, int id) {
-        if (id == 0) {
+        if (id == BUTTON_REROLL) {
             this.blockEntity.rollRandomRewardIntoSlot0();
             return true;
         }
 
-        if (id == 1) {
-            // Submit: e.g. consume submit slot item & complete tier
+        if (id == BUTTON_SUBMIT) {
             this.blockEntity.handleSubmit(player);
             return true;
         }
 
-        if (id >= 10 && id < 15) {
-            int tier = id - 10;
+        if (id >= BUTTON_TIER_BASE && id < BUTTON_TIER_MAX) {
+            int tier = id - BUTTON_TIER_BASE;
 
             if (!this.blockEntity.canUseTier(tier, player)) {
-                // Locked: do not change selection
                 return true;
             }
             this.blockEntity.setSelectedTier(tier);
@@ -88,59 +169,51 @@ public class PlushMenu extends AbstractContainerMenu {
         return false;
     }
 
-    public static final int INVENTORY_OFFSET_Y = 16*3 + 28;
-
-
+    /**
+     * Adds the player's main inventory slots to the container.
+     *
+     * @param playerInventory the player inventory
+     */
     private void addPlayerInventory(Inventory playerInventory) {
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 9; j++) {
-                this.addSlot(new Slot(playerInventory, j + i * 9 + 9, 8 + 1 + j * 18, 84 + INVENTORY_OFFSET_Y + i * 18));
+        for (int row = 0; row < PLAYER_INVENTORY_ROW_COUNT; row++) {
+            for (int col = 0; col < PLAYER_INVENTORY_COLUMN_COUNT; col++) {
+                int slotIndex = col + row * PLAYER_INVENTORY_COLUMN_COUNT + HOTBAR_SLOT_COUNT;
+                int x = INVENTORY_START_X + col * SLOT_SIZE;
+                int y = PLAYER_INVENTORY_START_Y + row * SLOT_SIZE;
+                this.addSlot(new Slot(playerInventory, slotIndex, x, y));
             }
         }
     }
 
+    /**
+     * Adds the player's hotbar slots to the container.
+     *
+     * @param playerInventory the player inventory
+     */
     private void addPlayerHotbar(Inventory playerInventory) {
-        for (int i = 0; i < 9; i++) {
-            this.addSlot(new Slot(playerInventory, i, 8 + 1 + i * 18, 142 + INVENTORY_OFFSET_Y));
+        for (int col = 0; col < HOTBAR_SLOT_COUNT; col++) {
+            int x = INVENTORY_START_X + col * SLOT_SIZE;
+            this.addSlot(new Slot(playerInventory, col, x, PLAYER_HOTBAR_Y));
         }
     }
 
-    // CREDIT GOES TO: diesieben07 | https://github.com/diesieben07/SevenCommons
-    // must assign a slot number to each of the slots used by the GUI.
-    // For this container, we can see both the tile inventory's slots as well as the player inventory slots and the hotbar.
-    // Each time we add a Slot to the container, it automatically increases the slotIndex, which means
-    //  0 - 8 = hotbar slots (which will map to the InventoryPlayer slot numbers 0 - 8)
-    //  9 - 35 = player inventory slots (which map to the InventoryPlayer slot numbers 9 - 35)
-    //  36 - 44 = TileInventory slots, which map to our TileEntity slot numbers 0 - 8)
-    private static final int HOTBAR_SLOT_COUNT = 9;
-    private static final int PLAYER_INVENTORY_ROW_COUNT = 3;
-    private static final int PLAYER_INVENTORY_COLUMN_COUNT = 9;
-    private static final int PLAYER_INVENTORY_SLOT_COUNT = PLAYER_INVENTORY_COLUMN_COUNT * PLAYER_INVENTORY_ROW_COUNT;
-    private static final int VANILLA_SLOT_COUNT = HOTBAR_SLOT_COUNT + PLAYER_INVENTORY_SLOT_COUNT;
-    private static final int VANILLA_FIRST_SLOT_INDEX = 0;
-    private static final int TE_INVENTORY_FIRST_SLOT_INDEX = VANILLA_FIRST_SLOT_INDEX + VANILLA_SLOT_COUNT;
-
-    // THIS YOU HAVE TO DEFINE!
-    private static final int TE_INVENTORY_SLOT_COUNT = 2;  // must be the number of slots you have!
     @Override
     public ItemStack quickMoveStack(Player playerIn, int pIndex) {
         Slot sourceSlot = slots.get(pIndex);
-        if (sourceSlot == null || !sourceSlot.hasItem()) return ItemStack.EMPTY;
+        if (sourceSlot == null || !sourceSlot.hasItem()) {
+            return ItemStack.EMPTY;
+        }
+
         ItemStack sourceStack = sourceSlot.getItem();
         ItemStack copyOfSourceStack = sourceStack.copy();
 
-        // Clicked a vanilla (player) slot → move into TE inventory
         if (pIndex < VANILLA_FIRST_SLOT_INDEX + VANILLA_SLOT_COUNT) {
-            // Only allow quick-move into the *submit* slot (index 1),
-            // not the requirement slot (index 0)
             int submitFirst = TE_INVENTORY_FIRST_SLOT_INDEX + 1;
             int submitLastExclusive = TE_INVENTORY_FIRST_SLOT_INDEX + TE_INVENTORY_SLOT_COUNT;
 
             if (!moveItemStackTo(sourceStack, submitFirst, submitLastExclusive, false)) {
                 return ItemStack.EMPTY;
             }
-
-            // Clicked a TE slot → move back into player inventory (both BE slots allowed to move out)
         } else if (pIndex < TE_INVENTORY_FIRST_SLOT_INDEX + TE_INVENTORY_SLOT_COUNT) {
             if (!moveItemStackTo(sourceStack,
                     VANILLA_FIRST_SLOT_INDEX,
@@ -149,11 +222,10 @@ public class PlushMenu extends AbstractContainerMenu {
                 return ItemStack.EMPTY;
             }
         } else {
-            System.out.println("Invalid slotIndex:" + pIndex);
+            TetoMod.LOGGER.warn("Invalid slot index: {}", pIndex);
             return ItemStack.EMPTY;
         }
 
-        // finalize
         if (sourceStack.getCount() == 0) {
             sourceSlot.set(ItemStack.EMPTY);
         } else {

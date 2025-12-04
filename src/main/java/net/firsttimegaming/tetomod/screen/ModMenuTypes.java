@@ -10,14 +10,39 @@ import net.neoforged.neoforge.network.IContainerFactory;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
+/**
+ * Registry class for all mod menu types.
+ * <p>
+ * Menu types define the container menus used for block and item GUIs.
+ */
 public class ModMenuTypes {
-    public static final DeferredRegister<MenuType<?>> MENU_TYPES = DeferredRegister.create(Registries.MENU, TetoMod.MOD_ID);
 
-    public static final DeferredHolder<MenuType<?>, MenuType<PlushMenu>> PLUSH_MENU = registerMenuType("plush_menu", PlushMenu::new);
+    /** Deferred register for all menu types in this mod. */
+    public static final DeferredRegister<MenuType<?>> MENU_TYPES =
+            DeferredRegister.create(Registries.MENU, TetoMod.MOD_ID);
 
-    private static <T extends AbstractContainerMenu> DeferredHolder<MenuType<?>, MenuType<T>> registerMenuType(String name, IContainerFactory<T> factory) {
+    /** The plush block menu type. */
+    public static final DeferredHolder<MenuType<?>, MenuType<PlushMenu>> PLUSH_MENU =
+            registerMenuType("plush_menu", PlushMenu::new);
+
+    /**
+     * Registers a menu type with the given factory.
+     *
+     * @param name    the registry name
+     * @param factory the container factory
+     * @param <T>     the menu type
+     * @return the deferred holder for the menu type
+     */
+    private static <T extends AbstractContainerMenu> DeferredHolder<MenuType<?>, MenuType<T>> registerMenuType(
+            String name, IContainerFactory<T> factory) {
         return MENU_TYPES.register(name, () -> IMenuTypeExtension.create(factory));
     }
+
+    /**
+     * Registers all menu types to the event bus.
+     *
+     * @param eventBus the mod event bus
+     */
     public static void register(IEventBus eventBus) {
         MENU_TYPES.register(eventBus);
     }
