@@ -11,18 +11,6 @@ import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import org.slf4j.Logger;
 import com.mojang.logging.LogUtils;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.food.FoodProperties;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.CreativeModeTab;
-import net.minecraft.world.item.CreativeModeTabs;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.minecraft.world.level.material.MapColor;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -31,34 +19,38 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
-import net.minecraft.client.Minecraft;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
-import net.neoforged.neoforge.registries.DeferredBlock;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredItem;
-import net.neoforged.neoforge.registries.DeferredRegister;
 
-// The value here should match an entry in the META-INF/neoforge.mods.toml file
+/**
+ * Main mod class for the Teto Mod.
+ * <p>
+ * This mod adds a plush block with a tiered trading system where players
+ * can exchange items for random rewards based on the selected tier.
+ */
 @Mod(TetoMod.MOD_ID)
 public class TetoMod {
-    // Define mod id in a common place for everything to reference
+
+    /** The unique mod identifier. Must match the entry in neoforge.mods.toml. */
     public static final String MOD_ID = "tetomod";
-    // Directly reference a slf4j logger
+
+    /** Logger instance for mod-wide logging. */
     public static final Logger LOGGER = LogUtils.getLogger();
 
-
-    // The constructor for the mod class is the first code that is run when your mod is loaded.
-    // FML will recognize some parameter types like IEventBus or ModContainer and pass them in automatically.
+    /**
+     * Constructs the main mod instance.
+     * <p>
+     * This is the entry point called by NeoForge when the mod is loaded.
+     * Registers all mod components and event listeners.
+     *
+     * @param modEventBus the mod-specific event bus
+     * @param modContainer the mod container
+     */
     public TetoMod(IEventBus modEventBus, ModContainer modContainer) {
-        // Register the commonSetup method for modloading
         modEventBus.addListener(this::commonSetup);
 
-        // Register ourselves for server and other game events we are interested in.
-        // Note that this is necessary if and only if we want *this* class (ExampleMod) to respond directly to events.
-        // Do not add this line if there are no @SubscribeEvent-annotated functions in this class, like onServerStarting() below.
         NeoForge.EVENT_BUS.register(this);
 
         ModCreativeModeTabs.register(modEventBus);
@@ -69,37 +61,60 @@ public class TetoMod {
 
         PlushTierConfigManager.load();
 
-
-        // Register the item to a creative tab
         modEventBus.addListener(this::addCreative);
 
-        // Register our mod's ModConfigSpec so that FML can create and load the config file for us
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
     }
 
+    /**
+     * Called during the common setup phase of mod loading.
+     *
+     * @param event the common setup event
+     */
     private void commonSetup(FMLCommonSetupEvent event) {
-
+        // Common setup tasks can be added here
     }
 
-    // Add the example block item to the building blocks tab
+    /**
+     * Adds items to creative mode tabs.
+     *
+     * @param event the creative tab contents event
+     */
     private void addCreative(BuildCreativeModeTabContentsEvent event) {
-
+        // Additional creative tab items can be added here
     }
 
-    // You can use SubscribeEvent and let the Event Bus discover methods to call
+    /**
+     * Called when the server is starting.
+     *
+     * @param event the server starting event
+     */
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-
+        // Server startup tasks can be added here
     }
 
-    // You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
+    /**
+     * Client-side event subscriber for registering client-only features.
+     */
     @EventBusSubscriber(modid = TetoMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     static class ClientModEvents {
+
+        /**
+         * Called during client setup.
+         *
+         * @param event the client setup event
+         */
         @SubscribeEvent
         static void onClientSetup(FMLClientSetupEvent event) {
-
+            // Client setup tasks can be added here
         }
 
+        /**
+         * Registers menu screens for containers.
+         *
+         * @param event the menu screen registration event
+         */
         @SubscribeEvent
         public static void registerScreens(RegisterMenuScreensEvent event) {
             event.register(ModMenuTypes.PLUSH_MENU.get(), PlushScreen::new);

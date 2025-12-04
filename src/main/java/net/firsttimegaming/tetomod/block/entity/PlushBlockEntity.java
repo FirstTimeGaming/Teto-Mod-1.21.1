@@ -4,13 +4,13 @@ import net.firsttimegaming.tetomod.config.PlushItemEntry;
 import net.firsttimegaming.tetomod.config.PlushTierConfig;
 import net.firsttimegaming.tetomod.config.PlushTierConfigManager;
 import net.firsttimegaming.tetomod.screen.PlushMenu;
+import net.firsttimegaming.tetomod.util.ItemStackUtils;
+import net.firsttimegaming.tetomod.util.WeightedRandomUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
@@ -20,10 +20,8 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import org.jetbrains.annotations.Nullable;
@@ -32,114 +30,182 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Block entity for the Plush block that manages tiered item trading.
+ * <p>
+ * The plush block allows players to submit required items and receive random rewards
+ * based on the currently selected tier. Each tier has its own pool of required items
+ * and potential rewards with configurable weights.
+ * <p>
+ * Tier progression is tracked per block entity, and higher tiers require completing
+ * previous tiers a certain number of times before they become available.
+ */
 public class PlushBlockEntity extends BlockEntity implements MenuProvider {
 
-    // how many tiers you have
+    // ==================== Class Variables ====================
+
+    /** The maximum number of tiers available in the plush system (0-indexed: 0 to MAX_TIER-1). */
     public static final int MAX_TIER = 5;
 
-    private int selectedTier = 0; // 0-based or 1-based, your choice
+    /** The number of inventory slots in the plush block. */
+    public static final int INVENTORY_SIZE = 2;
 
-    public int getSelectedTier() {
-        return selectedTier;
-    }
+    /** Slot index for the required item display. */
+    public static final int SLOT_REQUIREMENT = 0;
 
-    // one cached reward per tier index (0..MAX_TIER-1)
+    /** Slot index for player item submission. */
+    public static final int SLOT_SUBMIT = 1;
+
+    /** Default stack size limit for inventory slots. */
+    private static final int DEFAULT_STACK_LIMIT = 64;
+
+    /** Block update flags for synchronizing state to clients. */
+    private static final int BLOCK_UPDATE_FLAGS = 3;
+
+    /** NBT key for storing the inventory data. */
+    private static final String NBT_INVENTORY = "inventory";
+
+    /** NBT key for storing the selected tier. */
+    private static final String NBT_SELECTED_TIER = "SelectedTier";
+
+    /** NBT key for storing cached rewards. */
+    private static final String NBT_CACHED_REWARDS = "CachedRewards";
+
+    /** NBT key for storing tier completion counts. */
+    private static final String NBT_TIER_COMPLETIONS = "TierCompletions";
+
+    /** NBT key prefix for individual tier entries. */
+    private static final String NBT_TIER_PREFIX = "tier_";
+
+    /** NBT key for item ID in cached rewards. */
+    private static final String NBT_ITEM_ID = "id";
+
+    /** NBT key for item count in cached rewards. */
+    private static final String NBT_ITEM_COUNT = "count";
+
+    /** NBT key for item weight in cached rewards. */
+    private static final String NBT_ITEM_WEIGHT = "weight";
+
+    /** Sound volume for XP pickup sound. */
+    private static final float SOUND_VOLUME = 1.0F;
+
+    /** Sound pitch for XP pickup sound. */
+    private static final float SOUND_PITCH = 1.0F;
+
+    /** Offset for item drop position above the block. */
+    private static final double DROP_Y_OFFSET = 1.0;
+
+    /** Center offset for item drop position. */
+    private static final double DROP_CENTER_OFFSET = 0.5;
+
+    /** The currently selected tier index (0-based). */
+    private int selectedTier = 0;
+
+    /** Cached reward entries per tier to ensure consistency within a session. */
     private final Map<Integer, PlushItemEntry> cachedRewards = new HashMap<>();
 
-    // how many times each tier has been completed
+    /** Completion count for each tier. */
     private final Map<Integer, Integer> tierCompletions = new HashMap<>();
 
-    public final ItemStackHandler inventory = new ItemStackHandler(2) {
+    /** Inventory handler for the plush block's item slots. */
+    public final ItemStackHandler inventory = new ItemStackHandler(INVENTORY_SIZE) {
         @Override
         protected int getStackLimit(int slot, ItemStack stack) {
-            return 64;
+            return DEFAULT_STACK_LIMIT;
         }
 
         @Override
         protected void onContentsChanged(int slot) {
             setChanged();
-            if (!level.isClientSide())  {
-                level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+            if (level != null && !level.isClientSide()) {
+                level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
             }
         }
     };
 
+    // ==================== Constructor ====================
+
+    /**
+     * Constructs a new PlushBlockEntity at the specified position.
+     *
+     * @param pos        the block position
+     * @param blockState the block state
+     */
     public PlushBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.PLUSH_BLOCK_ENTITY.get(), pos, blockState);
     }
 
+    // ==================== Getter Methods ====================
+
+    /**
+     * Gets the currently selected tier index.
+     *
+     * @return the selected tier index (0-based)
+     */
+    public int getSelectedTier() {
+        return selectedTier;
+    }
+
+    /**
+     * Gets the configuration for the currently selected tier.
+     *
+     * @return the tier configuration containing items to give and receive
+     */
     public PlushTierConfig getCurrentTierConfig() {
         return PlushTierConfigManager.getTierConfig(this.selectedTier);
     }
 
-    /** Roll a random "give" item from the current tier config and put it in slot 0. */
-    public void rollRandomRewardIntoSlot0() {
-        if (level == null || level.isClientSide()) return;
-
-        PlushTierConfig tierConfig = getCurrentTierConfig();
-        List<PlushItemEntry> pool = tierConfig.itemsToGive;
-        if (pool == null || pool.isEmpty()) {
-            inventory.setStackInSlot(0, ItemStack.EMPTY);
-            return;
-        }
-
-        // Compute total weight
-        int totalWeight = 0;
-        for (PlushItemEntry entry : pool) {
-            int w = Math.max(1, entry.weight); // ensure at least 1
-            totalWeight += w;
-        }
-        if (totalWeight <= 0) {
-            inventory.setStackInSlot(0, ItemStack.EMPTY);
-            return;
-        }
-
-        // Roll a number in [0, totalWeight)
-        int roll = level.random.nextInt(totalWeight);
-        PlushItemEntry chosen = null;
-        int cumulative = 0;
-        for (PlushItemEntry entry : pool) {
-            int w = Math.max(1, entry.weight);
-            cumulative += w;
-            if (roll < cumulative) {
-                chosen = entry;
-                break;
-            }
-        }
-
-        if (chosen == null) {
-            inventory.setStackInSlot(0, ItemStack.EMPTY);
-            return;
-        }
-
-        // Convert id → Item
-        try {
-            ResourceLocation rl = ResourceLocation.parse(chosen.id);
-            Item item = BuiltInRegistries.ITEM.get(rl);
-            if (item != null && item != net.minecraft.world.item.Items.AIR) {
-                int count = Math.max(1, chosen.count);
-                inventory.setStackInSlot(0, new ItemStack(item, count));
-            } else {
-                inventory.setStackInSlot(0, ItemStack.EMPTY);
-            }
-        } catch (Exception e) {
-            inventory.setStackInSlot(0, ItemStack.EMPTY);
-        }
+    /**
+     * Gets the number of times the specified tier has been completed.
+     *
+     * @param tierIndex the tier index (0-based)
+     * @return the completion count for the tier
+     */
+    public int getTierCompletions(int tierIndex) {
+        return tierCompletions.getOrDefault(tierIndex, 0);
     }
 
-    public void clearContents() {
-        inventory.setStackInSlot(0, ItemStack.EMPTY);
+    /**
+     * Gets how many times the specified tier has been completed for this block.
+     *
+     * @param tierIndex the tier index (0-based)
+     * @return the number of completions
+     */
+    public int getTimesCompleted(int tierIndex) {
+        return tierCompletions.getOrDefault(tierIndex, 0);
     }
 
-    public void drops() {
-        SimpleContainer inv = new SimpleContainer(inventory.getSlots());
-        for (int i = 1; i < inventory.getSlots(); i++) {
-            inv.setItem(i, inventory.getStackInSlot(i));
-        }
-
-        Containers.dropContents(this.level, this.worldPosition, inv);
+    /**
+     * Gets how many times the currently selected tier has been completed.
+     *
+     * @return the number of completions for the current tier
+     */
+    public int getTimesCompletedForCurrentTier() {
+        return getTimesCompleted(this.selectedTier);
     }
 
+    /**
+     * Gets a random reward from the current tier's reward pool.
+     *
+     * @return the reward ItemStack, or empty if no valid reward could be selected
+     */
+    public ItemStack getRandomRewardForCurrentTier() {
+        PlushTierConfig tierCfg = PlushTierConfigManager.getTierConfig(this.selectedTier);
+        RandomSource random = (level != null ? level.random : RandomSource.create());
+        PlushItemEntry entry = WeightedRandomUtils.pickWeighted(tierCfg.itemsToReceive, random);
+        return ItemStackUtils.toStack(entry);
+    }
+
+    // ==================== Setter Methods ====================
+
+    /**
+     * Sets the currently selected tier, clamping to valid range.
+     * <p>
+     * When changing tiers, this will either restore a cached reward for that tier
+     * or roll a new one if none is cached.
+     *
+     * @param tier the tier index to select (will be clamped to 0 to MAX_TIER-1)
+     */
     public void setSelectedTier(int tier) {
         tier = Math.max(0, Math.min(tier, MAX_TIER - 1));
 
@@ -149,111 +215,158 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
             if (level != null && !level.isClientSide()) {
                 PlushItemEntry existingItem = cachedRewards.get(selectedTier);
                 if (existingItem == null) {
-                    // no cached reward yet, roll a new one
                     rollRandomRewardIntoSlot0();
                 } else {
-                    // use cached reward
-                    ItemStack stack = toStack(existingItem);
-                    inventory.setStackInSlot(0, stack);
+                    ItemStack stack = ItemStackUtils.toStack(existingItem);
+                    inventory.setStackInSlot(SLOT_REQUIREMENT, stack);
                 }
             }
 
             setChanged();
             if (level != null && !level.isClientSide()) {
-                level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+                level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
             }
         }
     }
 
+    // ==================== Custom Methods ====================
 
+    /**
+     * Rolls a random required item from the current tier's item pool and places it in the requirement slot.
+     * This determines what item the player needs to submit for the current tier.
+     */
+    public void rollRandomRewardIntoSlot0() {
+        if (level == null || level.isClientSide()) {
+            return;
+        }
+
+        PlushTierConfig tierConfig = getCurrentTierConfig();
+        List<PlushItemEntry> pool = tierConfig.itemsToGive;
+
+        PlushItemEntry chosen = pickWeightedWithMinWeight(pool);
+        ItemStack stack = ItemStackUtils.toStack(chosen);
+        inventory.setStackInSlot(SLOT_REQUIREMENT, stack);
+    }
+
+    /**
+     * Clears the requirement slot contents.
+     */
+    public void clearContents() {
+        inventory.setStackInSlot(SLOT_REQUIREMENT, ItemStack.EMPTY);
+    }
+
+    /**
+     * Drops all items from the submit slot when the block is broken.
+     */
+    public void drops() {
+        SimpleContainer inv = new SimpleContainer(inventory.getSlots());
+        for (int i = SLOT_SUBMIT; i < inventory.getSlots(); i++) {
+            inv.setItem(i, inventory.getStackInSlot(i));
+        }
+
+        Containers.dropContents(this.level, this.worldPosition, inv);
+    }
+
+    /**
+     * Handles the submit action when a player confirms their item offering.
+     * <p>
+     * This method:
+     * <ul>
+     *   <li>Validates that the offered item matches the required item</li>
+     *   <li>Consumes the required amount from the submit slot</li>
+     *   <li>Plays a success sound</li>
+     *   <li>Drops a random reward from the current tier's reward pool</li>
+     *   <li>Increments the tier completion count</li>
+     *   <li>Rolls a new required item</li>
+     * </ul>
+     *
+     * @param player the player submitting the item
+     */
     public void handleSubmit(Player player) {
         if (level == null || level.isClientSide()) {
             return;
         }
 
-        ItemStack required = inventory.getStackInSlot(0); // what plush wants
-        ItemStack offered  = inventory.getStackInSlot(1); // what player offered
+        ItemStack required = inventory.getStackInSlot(SLOT_REQUIREMENT);
+        ItemStack offered = inventory.getStackInSlot(SLOT_SUBMIT);
 
-        // nothing required or offered
         if (required.isEmpty() || offered.isEmpty()) {
             return;
         }
 
-        // mismatched item (ignore count)
         if (!ItemStack.isSameItemSameComponents(required, offered)) {
             return;
         }
 
         int requiredCount = required.getCount();
         if (offered.getCount() < requiredCount) {
-            // not enough
             return;
         }
 
-        // --- consume required amount from slot 1 ---
         offered.shrink(requiredCount);
         if (offered.isEmpty()) {
-            inventory.setStackInSlot(1, ItemStack.EMPTY);
+            inventory.setStackInSlot(SLOT_SUBMIT, ItemStack.EMPTY);
         } else {
-            inventory.setStackInSlot(1, offered);
+            inventory.setStackInSlot(SLOT_SUBMIT, offered);
         }
 
-        // --- play XP sound ---
         level.playSound(
                 null,
                 worldPosition,
                 SoundEvents.EXPERIENCE_ORB_PICKUP,
                 SoundSource.BLOCKS,
-                1.0F,
-                1.0F
+                SOUND_VOLUME,
+                SOUND_PITCH
         );
 
-        // --- get random reward from itemsToGive for this tier ---
         ItemStack reward = getRandomRewardForCurrentTier();
         if (!reward.isEmpty()) {
-            // Drop from the block entity position instead of giving to player
-            double dropX = worldPosition.getX() + 0.5;
-            double dropY = worldPosition.getY() + 1.0;   // slightly above the block
-            double dropZ = worldPosition.getZ() + 0.5;
+            double dropX = worldPosition.getX() + DROP_CENTER_OFFSET;
+            double dropY = worldPosition.getY() + DROP_Y_OFFSET;
+            double dropZ = worldPosition.getZ() + DROP_CENTER_OFFSET;
 
             Containers.dropItemStack(level, dropX, dropY, dropZ, reward.copy());
         }
 
-        // --- increment times completed for this tier ---
         incrementTierCompletions(this.selectedTier);
-
-        // --- reroll new requirement into slot 0 ---
         rollRandomRewardIntoSlot0();
 
         setChanged();
-        level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
     }
 
-    public int getTierCompletions(int tierIndex) {
-        return tierCompletions.getOrDefault(tierIndex, 0);
-    }
-
+    /**
+     * Increments the completion count for the specified tier.
+     *
+     * @param tier the tier index to increment (0-based)
+     */
     public void incrementTierCompletions(int tier) {
         if (tier >= 0 && tier < MAX_TIER) {
-            tierCompletions.get(tier);
             int current = tierCompletions.getOrDefault(tier, 0);
             tierCompletions.put(tier, current + 1);
             setChanged();
         }
     }
 
+    /**
+     * Checks if the player can use the specified tier.
+     * <p>
+     * Tiers are unlocked based on completing the previous tier a certain number of times.
+     * Tier 0 (first tier) is always available.
+     *
+     * @param tierIndex the tier index to check (0-based)
+     * @param player    the player attempting to use the tier, may be null
+     * @return true if the tier is unlocked and usable, false otherwise
+     */
     public boolean canUseTier(int tierIndex, @Nullable Player player) {
-        // Clamp the tier index
         tierIndex = Math.max(0, Math.min(tierIndex, MAX_TIER - 1));
 
         int required = PlushTierConfigManager.getRequiredCompletionsForTier(tierIndex);
 
-        // Tier 0 or anything with required <= 0 is always usable
         if (required <= 0 || tierIndex == 0) {
             return true;
         }
 
-        // We defined locks in terms of completions of the *previous* tier
         int prevTierIndex = tierIndex - 1;
         int completedPrev = getTierCompletions(prevTierIndex);
 
@@ -274,184 +387,32 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         return unlocked;
     }
 
-    public ItemStack getRandomRewardForCurrentTier() {
-        PlushTierConfig tierCfg = PlushTierConfigManager.getTierConfig(this.selectedTier);
-        PlushItemEntry entry = pickWeighted(tierCfg.itemsToReceive);
-        return toStack(entry);
-    }
-
-    @Override
-    public void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.saveAdditional(tag, registries);
-        tag.put("inventory", inventory.serializeNBT(registries));
-        tag.putInt("SelectedTier", this.selectedTier);
-
-        // Save cached rewards
-        CompoundTag cacheTag = new CompoundTag();
-        for (Map.Entry<Integer, PlushItemEntry> e : cachedRewards.entrySet()) {
-            int tierIndex = e.getKey();
-            PlushItemEntry entry = e.getValue();
-            CompoundTag rt = new CompoundTag();
-            rt.putString("id", entry.id);
-            rt.putInt("count", entry.count);
-            rt.putInt("weight", entry.weight);
-            cacheTag.put("tier_" + tierIndex, rt);
-        }
-        tag.put("CachedRewards", cacheTag);
-
-        // Save completions
-        CompoundTag completedTag = new CompoundTag();
-        for (Map.Entry<Integer, Integer> e : tierCompletions.entrySet()) {
-            int tierIndex = e.getKey();
-            int completed = e.getValue();
-            completedTag.putInt("tier_" + tierIndex, completed);
-        }
-        tag.put("TierCompletions", completedTag);
-
-    }
-
-    @Override
-    public void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.loadAdditional(tag, registries);
-        inventory.deserializeNBT(registries, tag.getCompound("inventory"));
-
-        if (tag.contains("SelectedTier")) {
-            this.selectedTier = tag.getInt("SelectedTier");
-        }
-
-        // Load cached rewards
-        cachedRewards.clear();
-        if (tag.contains("CachedRewards")) {
-            CompoundTag cacheTag = tag.getCompound("CachedRewards");
-            for (String key : cacheTag.getAllKeys()) {
-                if (key.startsWith("tier_")) {
-                    try {
-                        int tierIndex = Integer.parseInt(key.substring("tier_".length()));
-                        CompoundTag rt = cacheTag.getCompound(key);
-                        String id = rt.getString("id");
-                        int count = rt.getInt("count");
-                        int weight = rt.contains("weight") ? rt.getInt("weight") : 1;
-                        cachedRewards.put(tierIndex, new PlushItemEntry(id, count, weight));
-                    } catch (NumberFormatException ignored) {}
-                }
-            }
-        }
-
-        // Load completions
-        tierCompletions.clear();
-        if (tag.contains("TierCompletions")) {
-            CompoundTag completedTag = tag.getCompound("TierCompletions");
-            for (String key : completedTag.getAllKeys()) {
-                if (key.startsWith("tier_")) {
-                    try {
-                        int tierIndex = Integer.parseInt(key.substring("tier_".length()));
-                        int completed = completedTag.getInt(key);
-                        tierCompletions.put(tierIndex, completed);
-                    } catch (NumberFormatException ignored) {}
-                }
-            }
-        }
-    }
-
-    /** Convert a PlushItemEntry into an ItemStack (or EMPTY on error). */
-    private ItemStack toStack(PlushItemEntry entry) {
-        if (entry == null) return ItemStack.EMPTY;
-        try {
-            ResourceLocation rl = ResourceLocation.parse(entry.id);
-            Item item = BuiltInRegistries.ITEM.get(rl);
-            if (item != null && item != net.minecraft.world.item.Items.AIR) {
-                int count = Math.max(1, entry.count);
-                return new ItemStack(item, count);
-            }
-        } catch (Exception ignored) {}
-        return ItemStack.EMPTY;
-    }
-
-    /** Get how many times the given tier (0-based) has been completed for this block. */
-    public int getTimesCompleted(int tierIndex) {
-        return tierCompletions.getOrDefault(tierIndex, 0);
-    }
-
-    /** Get how many times the currently selected tier has been completed. */
-    public int getTimesCompletedForCurrentTier() {
-        return getTimesCompleted(this.selectedTier);
-    }
-
-    @Nullable
-    private PlushItemEntry pickWeighted(java.util.List<PlushItemEntry> list) {
-        if (list == null || list.isEmpty()) return null;
-        RandomSource random = (level != null ? level.random : RandomSource.create());
-
-        int totalWeight = 0;
-        for (PlushItemEntry e : list) {
-            if (e != null && e.weight > 0) {
-                totalWeight += e.weight;
-            }
-        }
-        if (totalWeight <= 0) return null;
-
-        int roll = random.nextInt(totalWeight); // [0, totalWeight)
-        int accum = 0;
-        for (PlushItemEntry e : list) {
-            if (e == null || e.weight <= 0) continue;
-            accum += e.weight;
-            if (roll < accum) {
-                return e;
-            }
-        }
-        return null; // shouldn't happen
-    }
-
-
-
     /**
-     * Call this when the current tier is "completed":
-     * - increments completion count
-     * - clears the cached reward for this tier
-     * - next usage of this tier will roll a new reward
+     * Marks the current tier as completed.
+     * <p>
+     * This increments the completion count and clears the cached reward,
+     * so the next usage of this tier will roll a new reward.
      */
     public void markCurrentTierCompleted() {
         int current = tierCompletions.getOrDefault(selectedTier, 0);
         tierCompletions.put(selectedTier, current + 1);
 
-        // Clear cached reward so next time we need a fresh roll
         cachedRewards.remove(selectedTier);
 
         setChanged();
         if (level != null && !level.isClientSide()) {
-            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
         }
     }
 
-    private PlushItemEntry rollRandomRewardForCurrentTier() {
-        if (level == null) return null;
-
-        PlushTierConfig tierConfig = getCurrentTierConfig();
-        List<PlushItemEntry> pool = tierConfig.itemsToGive;
-        if (pool == null || pool.isEmpty()) return null;
-
-        int totalWeight = 0;
-        for (PlushItemEntry e : pool) {
-            int w = Math.max(1, e.weight);
-            totalWeight += w;
-        }
-        if (totalWeight <= 0) return null;
-
-        int roll = level.random.nextInt(totalWeight);
-        int cumulative = 0;
-        for (PlushItemEntry e : pool) {
-            int w = Math.max(1, e.weight);
-            cumulative += w;
-            if (roll < cumulative) {
-                // store the *full* entry so we can reconstruct the same stack later
-                return new PlushItemEntry(e.id, e.count, e.weight);
-            }
-        }
-        return null;
-    }
-
+    /**
+     * Ensures a reward is cached and displayed for the current tier.
+     * If no cached reward exists, a new one is rolled.
+     */
     public void ensureRewardForCurrentTier() {
-        if (level == null || level.isClientSide()) return;
+        if (level == null || level.isClientSide()) {
+            return;
+        }
 
         PlushItemEntry cached = cachedRewards.get(selectedTier);
         if (cached == null) {
@@ -462,14 +423,67 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
             }
         }
 
-        ItemStack stack = toStack(cached);
-        inventory.setStackInSlot(0, stack);
+        ItemStack stack = ItemStackUtils.toStack(cached);
+        inventory.setStackInSlot(SLOT_REQUIREMENT, stack);
 
-        level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
     }
 
+    /**
+     * Rolls a random reward entry for the current tier using weighted selection.
+     * Entries with weight <= 0 are treated as having weight 1.
+     *
+     * @return the selected entry, or null if no valid entry could be selected
+     */
+    @Nullable
+    private PlushItemEntry rollRandomRewardForCurrentTier() {
+        if (level == null) {
+            return null;
+        }
 
+        PlushTierConfig tierConfig = getCurrentTierConfig();
+        List<PlushItemEntry> pool = tierConfig.itemsToGive;
 
+        PlushItemEntry selected = pickWeightedWithMinWeight(pool);
+        return WeightedRandomUtils.copyEntry(selected);
+    }
+
+    /**
+     * Picks a weighted entry from the list, treating entries with weight <= 0 as weight 1.
+     *
+     * @param pool the list of entries to select from
+     * @return the selected entry, or null if pool is empty
+     */
+    @Nullable
+    private PlushItemEntry pickWeightedWithMinWeight(List<PlushItemEntry> pool) {
+        if (pool == null || pool.isEmpty()) {
+            return null;
+        }
+
+        int totalWeight = 0;
+        for (PlushItemEntry entry : pool) {
+            int w = Math.max(1, entry.weight);
+            totalWeight += w;
+        }
+
+        if (totalWeight <= 0 || level == null) {
+            return null;
+        }
+
+        int roll = level.random.nextInt(totalWeight);
+        int cumulative = 0;
+        for (PlushItemEntry entry : pool) {
+            int w = Math.max(1, entry.weight);
+            cumulative += w;
+            if (roll < cumulative) {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    // ==================== Overridden Methods ====================
 
     @Override
     public Component getDisplayName() {
@@ -479,7 +493,6 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
     @Override
     public @Nullable AbstractContainerMenu createMenu(int i, Inventory inventory, Player player) {
         if (level != null && !level.isClientSide()) {
-            // Only generate a reward if we don't already have one cached for this tier
             ensureRewardForCurrentTier();
         }
         return new PlushMenu(i, inventory, this);
@@ -488,13 +501,11 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
     @Nullable
     @Override
     public ClientboundBlockEntityDataPacket getUpdatePacket() {
-        // sends the BE data to the client
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
     @Override
     public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
-        // what gets sent to the client when the chunk is loaded / updated
         CompoundTag tag = new CompoundTag();
         saveAdditional(tag, registries);
         return tag;
@@ -502,7 +513,78 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
 
     @Override
     public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
-        // how the client applies that data
         loadAdditional(tag, registries);
+    }
+
+    @Override
+    public void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
+        tag.put(NBT_INVENTORY, inventory.serializeNBT(registries));
+        tag.putInt(NBT_SELECTED_TIER, this.selectedTier);
+
+        CompoundTag cacheTag = new CompoundTag();
+        for (Map.Entry<Integer, PlushItemEntry> e : cachedRewards.entrySet()) {
+            int tierIdx = e.getKey();
+            PlushItemEntry entry = e.getValue();
+            CompoundTag rt = new CompoundTag();
+            rt.putString(NBT_ITEM_ID, entry.id);
+            rt.putInt(NBT_ITEM_COUNT, entry.count);
+            rt.putInt(NBT_ITEM_WEIGHT, entry.weight);
+            cacheTag.put(NBT_TIER_PREFIX + tierIdx, rt);
+        }
+        tag.put(NBT_CACHED_REWARDS, cacheTag);
+
+        CompoundTag completedTag = new CompoundTag();
+        for (Map.Entry<Integer, Integer> e : tierCompletions.entrySet()) {
+            int tierIdx = e.getKey();
+            int completed = e.getValue();
+            completedTag.putInt(NBT_TIER_PREFIX + tierIdx, completed);
+        }
+        tag.put(NBT_TIER_COMPLETIONS, completedTag);
+    }
+
+    @Override
+    public void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
+        inventory.deserializeNBT(registries, tag.getCompound(NBT_INVENTORY));
+
+        if (tag.contains(NBT_SELECTED_TIER)) {
+            this.selectedTier = tag.getInt(NBT_SELECTED_TIER);
+        }
+
+        cachedRewards.clear();
+        if (tag.contains(NBT_CACHED_REWARDS)) {
+            CompoundTag cacheTag = tag.getCompound(NBT_CACHED_REWARDS);
+            for (String key : cacheTag.getAllKeys()) {
+                if (key.startsWith(NBT_TIER_PREFIX)) {
+                    try {
+                        int tierIdx = Integer.parseInt(key.substring(NBT_TIER_PREFIX.length()));
+                        CompoundTag rt = cacheTag.getCompound(key);
+                        String id = rt.getString(NBT_ITEM_ID);
+                        int count = rt.getInt(NBT_ITEM_COUNT);
+                        int weight = rt.contains(NBT_ITEM_WEIGHT) ? rt.getInt(NBT_ITEM_WEIGHT) : 1;
+                        cachedRewards.put(tierIdx, new PlushItemEntry(id, count, weight));
+                    } catch (NumberFormatException ignored) {
+                        // Skip invalid entries
+                    }
+                }
+            }
+        }
+
+        tierCompletions.clear();
+        if (tag.contains(NBT_TIER_COMPLETIONS)) {
+            CompoundTag completedTag = tag.getCompound(NBT_TIER_COMPLETIONS);
+            for (String key : completedTag.getAllKeys()) {
+                if (key.startsWith(NBT_TIER_PREFIX)) {
+                    try {
+                        int tierIdx = Integer.parseInt(key.substring(NBT_TIER_PREFIX.length()));
+                        int completed = completedTag.getInt(key);
+                        tierCompletions.put(tierIdx, completed);
+                    } catch (NumberFormatException ignored) {
+                        // Skip invalid entries
+                    }
+                }
+            }
+        }
     }
 }

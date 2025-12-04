@@ -7,125 +7,175 @@ import net.firsttimegaming.tetomod.client.widget.DropdownWidget;
 import net.firsttimegaming.tetomod.config.PlushItemEntry;
 import net.firsttimegaming.tetomod.config.PlushTierConfig;
 import net.firsttimegaming.tetomod.config.PlushTierConfigManager;
+import net.firsttimegaming.tetomod.util.ItemStackUtils;
+import net.firsttimegaming.tetomod.util.WeightedRandomUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * Screen for the Plush block's trading interface.
+ * <p>
+ * Displays the tier selection, reward pool, and submit/refresh controls
+ * for the plush trading system.
+ */
 public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
 
+    // ==================== Class Variables ====================
+
+    /** The GUI background texture resource location. */
     private static final ResourceLocation GUI_TEXTURE =
             ResourceLocation.fromNamespaceAndPath(TetoMod.MOD_ID, "textures/gui/plush/place_holder_gui.png");
 
+    /** GUI width in pixels. */
+    private static final int GUI_WIDTH = 175;
+
+    /** GUI height in pixels. */
+    private static final int GUI_HEIGHT = 241;
+
+    /** GUI texture size in pixels. */
+    private static final int TEXTURE_SIZE = 256;
+
+    /** Title X offset from left edge. */
+    private static final int TITLE_X = 8;
+
+    /** Title Y position. */
+    private static final int TITLE_Y = 6;
+
+    /** Text color for labels. */
+    private static final int LABEL_COLOR = 0x404040;
+
+    /** Shader color components. */
+    private static final float SHADER_COLOR = 1.0F;
+
+    /** Item display X offset. */
+    private static final int INFO_X = 30;
+
+    /** Item display Y offset. */
+    private static final int INFO_Y = 30;
+
+    /** Reward pool label Y position. */
+    private static final int REWARD_LABEL_Y = 47;
+
+    /** Inventory label Y offset from first row. */
+    private static final int INV_LABEL_OFFSET = 12;
+
+    /** Dropdown width. */
+    private static final int DROPDOWN_WIDTH = 80;
+
+    /** Dropdown height. */
+    private static final int DROPDOWN_HEIGHT = 16;
+
+    /** Dropdown X offset from title. */
+    private static final int DROPDOWN_X_OFFSET = 61;
+
+    /** Dropdown Y offset from top. */
+    private static final int DROPDOWN_Y_OFFSET = 4;
+
+    /** Button width. */
+    private static final int BUTTON_SIZE = 20;
+
+    /** Button X offset from submit slot. */
+    private static final int BUTTON_OFFSET = 24;
+
+    /** Submit slot GUI X position. */
+    private static final int SUBMIT_SLOT_GUI_X = 81;
+
+    /** Submit slot GUI Y position. */
+    private static final int SUBMIT_SLOT_GUI_Y = 130;
+
+    /** Button Y adjustment. */
+    private static final int BUTTON_Y_ADJUST = 2;
+
+    /** Reward pool starting X position. */
+    private static final int REWARD_POOL_START_X = 9;
+
+    /** Reward pool starting Y position. */
+    private static final int REWARD_POOL_START_Y = 60;
+
+    /** Size of each reward pool item slot. */
+    private static final int REWARD_SLOT_SIZE = 18;
+
+    /** Number of columns in the reward pool display. */
+    private static final int REWARD_POOL_COLS = 7;
+
+    /** Item hover detection size. */
+    private static final int ITEM_HOVER_SIZE = 16;
+
+    /** Percentage multiplier for tooltip. */
+    private static final double PERCENTAGE_MULTIPLIER = 100.0;
+
+    /** Maximum tier index for clamping. */
+    private static final int MAX_TIER_INDEX = 4;
+
+    /** The tier selection dropdown widget. */
     private DropdownWidget tierDropdown;
 
+    // ==================== Constructor ====================
+
+    /**
+     * Constructs a new PlushScreen.
+     *
+     * @param menu      the container menu
+     * @param inventory the player inventory
+     * @param title     the screen title
+     */
     public PlushScreen(PlushMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
-        // these are correct for your tall 256x256 texture
-        this.imageWidth = 175;
-        this.imageHeight = 241;
+        this.imageWidth = GUI_WIDTH;
+        this.imageHeight = GUI_HEIGHT;
     }
 
-    @Override
-    protected void init() {
-        super.init();
+    // ==================== Custom Methods ====================
 
-        int left = this.leftPos;
-        int top = this.topPos;
-
-        // --- Dropdown right of the title ("Teto") ---
-        String titleText = this.title.getString();
-        int titleWidth = this.font.width(titleText);
-
-        int dropdownX = left + 8 + titleWidth + 61;
-        int dropdownY = top + 4;
-
-        this.tierDropdown = new DropdownWidget(
-                dropdownX,
-                dropdownY,
-                80,
-                16,
-                List.of(
-                        Component.literal("Tier 1"),
-                        Component.literal("Tier 2"),
-                        Component.literal("Tier 3"),
-                        Component.literal("Tier 4"),
-                        Component.literal("Tier 5")
-                ),
-                this::onTierSelected
-        );
-
-        // 🔹 Set dropdown to the BE's current tier (clamped just in case)
-        int beTier = this.menu.blockEntity.getSelectedTier();
-        if (beTier < 0) beTier = 0;
-        if (beTier >= 5) beTier = 4;
-        this.tierDropdown.setSelectedIndex(beTier);
-
-        // --- Buttons around the submit slot ---
-        // submit slot in PlushMenu is at GUI coords (80, 72)
-        int submitSlotGuiX = 81;
-        int submitSlotGuiY = 130;
-        int submitSlotX = left + submitSlotGuiX;
-        int submitSlotY = top + submitSlotGuiY - 2;
-
-        // Refresh button to the left
-        this.addRenderableWidget(
-                Button.builder(Component.literal("R"), b -> onRefreshClicked())
-                        .bounds(submitSlotX - 24, submitSlotY, 20, 20)
-                        .build()
-        );
-
-        // Submit button (checkmark) to the right
-        this.addRenderableWidget(
-                Button.builder(Component.literal("✓"), b -> onSubmitClicked())
-                        .bounds(submitSlotX + 20, submitSlotY, 20, 20)
-                        .build()
-        );
-
-        // Render after so its on top
-        this.addRenderableWidget(this.tierDropdown);
-
-    }
-
-    // ----- button callbacks -----
+    /**
+     * Handles the refresh button click.
+     */
     private void onRefreshClicked() {
         if (this.minecraft != null && this.minecraft.gameMode != null) {
             this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 0);
         }
     }
 
+    /**
+     * Handles the submit button click.
+     */
     private void onSubmitClicked() {
         if (this.minecraft != null && this.minecraft.gameMode != null) {
             this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 1);
         }
     }
 
+    /**
+     * Handles tier selection from the dropdown.
+     *
+     * @param index the selected tier index (0-based)
+     */
     private void onTierSelected(int index) {
         if (this.minecraft != null && this.minecraft.gameMode != null) {
-            // 10..14 are tier 1..5 in PlushMenu.clickMenuButton
             this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 10 + index);
         }
     }
 
     /**
-     * Draws the "Reward Pool" ghost items (itemsToReceive for the selected tier)
-     * inside the big grey box, and shows a tooltip with chance on hover.
+     * Renders the reward pool items and their tooltips.
+     *
+     * @param guiGraphics the graphics context
+     * @param mouseX      the mouse X position
+     * @param mouseY      the mouse Y position
      */
     private void renderRewardPool(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        // Which tier are we on? (block entity keeps this in sync)
         int tierIndex = this.menu.blockEntity.getSelectedTier();
 
         PlushTierConfig tierConfig = PlushTierConfigManager.getTierConfig(tierIndex);
@@ -134,18 +184,10 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
             return;
         }
 
-        // Layout inside the big grey "reward pool" rectangle.
-        // Tweak these if you want items closer/further from the edges.
-        int startX = this.leftPos + 9;   // left padding inside box
-        int startY = this.topPos + 60;   // top padding inside box
-        int slotSize = 18;               // like normal slot size
-        int cols = 7;                    // how many item "slots" per row
+        int startX = this.leftPos + REWARD_POOL_START_X;
+        int startY = this.topPos + REWARD_POOL_START_Y;
 
-        // total weight for percentage calculation
-        int totalWeight = 0;
-        for (PlushItemEntry e : rewards) {
-            totalWeight += Math.max(e.weight, 0);
-        }
+        int totalWeight = WeightedRandomUtils.calculateTotalWeight(rewards);
         if (totalWeight <= 0) {
             return;
         }
@@ -153,25 +195,24 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         for (int i = 0; i < rewards.size(); i++) {
             PlushItemEntry entry = rewards.get(i);
 
-            // make an ItemStack for rendering
-            ItemStack stack = entryToStack(entry);
-            if (stack.isEmpty()) continue;
+            ItemStack stack = ItemStackUtils.toStack(entry);
+            if (stack.isEmpty()) {
+                continue;
+            }
 
-            int col = i % cols;
-            int row = i / cols;
+            int col = i % REWARD_POOL_COLS;
+            int row = i / REWARD_POOL_COLS;
 
-            int x = startX + col * slotSize;
-            int y = startY + row * slotSize;
+            int x = startX + col * REWARD_SLOT_SIZE;
+            int y = startY + row * REWARD_SLOT_SIZE;
 
-            // draw the item like a normal slot content
             guiGraphics.renderItem(stack, x, y);
             guiGraphics.renderItemDecorations(this.font, stack, x, y);
 
-            // hover detection & tooltip
-            if (mouseX >= x && mouseX < x + 16 &&
-                    mouseY >= y && mouseY < y + 16) {
+            if (mouseX >= x && mouseX < x + ITEM_HOVER_SIZE &&
+                    mouseY >= y && mouseY < y + ITEM_HOVER_SIZE) {
 
-                double chance = (entry.weight * 100.0) / totalWeight;
+                double chance = (entry.weight * PERCENTAGE_MULTIPLIER) / totalWeight;
                 String chanceText = String.format(Locale.ROOT, "%.1f%% chance", chance);
 
                 List<Component> tooltip = new ArrayList<>();
@@ -190,41 +231,49 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         }
     }
 
+    /**
+     * Renders the tier preview tooltip when hovering over the dropdown.
+     *
+     * @param guiGraphics the graphics context
+     * @param mouseX      the mouse X position
+     * @param mouseY      the mouse Y position
+     */
     private void renderTierPreviewTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        if (this.tierDropdown == null) return;
+        if (this.tierDropdown == null) {
+            return;
+        }
 
         int dx = this.tierDropdown.getX();
         int dy = this.tierDropdown.getY();
-        int w  = this.tierDropdown.getWidth();
-        int h  = this.tierDropdown.getHeight();
+        int w = this.tierDropdown.getWidth();
+        int h = this.tierDropdown.getHeight();
 
         int hoveredTierIndex = -1;
 
-        // If dropdown is open, check which option row is hovered
         if (this.tierDropdown.isOpen()) {
             int optionHeight = h;
             for (int i = 0; i < this.tierDropdown.getOptionCount(); i++) {
                 int oy = dy + h + i * optionHeight;
-                int ox = dx;
-                if (mouseX >= ox && mouseX < ox + w && mouseY >= oy && mouseY < oy + optionHeight) {
+                if (mouseX >= dx && mouseX < dx + w && mouseY >= oy && mouseY < oy + optionHeight) {
                     hoveredTierIndex = i;
                     break;
                 }
             }
         } else {
-            // Closed: hovering the main box previews the currently selected tier
             if (mouseX >= dx && mouseX < dx + w && mouseY >= dy && mouseY < dy + h) {
                 hoveredTierIndex = this.tierDropdown.getSelectedIndex();
             }
         }
 
-        if (hoveredTierIndex < 0) return;
+        if (hoveredTierIndex < 0) {
+            return;
+        }
 
-        // Get config for that tier
         PlushTierConfig tierCfg = PlushTierConfigManager.getTierConfig(hoveredTierIndex);
-        if (tierCfg == null) return;
+        if (tierCfg == null) {
+            return;
+        }
 
-        // Lock info
         int required = PlushTierConfigManager.getRequiredCompletionsForTier(hoveredTierIndex);
         boolean unlocked = isTierUnlockedClient(hoveredTierIndex);
 
@@ -233,14 +282,12 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
 
         List<Component> lines = new ArrayList<>();
 
-        // Header: Tier X - Unlocked / Locked
         Component header = Component.literal("Tier " + (hoveredTierIndex + 1) + " - ")
                 .append(unlocked
                         ? Component.literal("Unlocked").withStyle(ChatFormatting.GREEN)
                         : Component.literal("Locked").withStyle(ChatFormatting.RED));
         lines.add(header);
 
-        // Progress line for tiers > 1 (lock depends on previous tier)
         if (hoveredTierIndex > 0 && required > 0) {
             lines.add(
                     Component.literal("Progress: ")
@@ -256,17 +303,14 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
             }
         }
 
-        // Blank line spacer
         lines.add(Component.empty());
-
-        // Requirements header
         lines.add(Component.literal("Required items:").withStyle(ChatFormatting.YELLOW));
 
         if (tierCfg.itemsToGive == null || tierCfg.itemsToGive.isEmpty()) {
             lines.add(Component.literal("None").withStyle(ChatFormatting.GRAY));
         } else {
             for (PlushItemEntry e : tierCfg.itemsToGive) {
-                ItemStack stack = entryToStack(e);
+                ItemStack stack = ItemStackUtils.toStack(e);
                 String name = stack.isEmpty() ? e.id : stack.getHoverName().getString();
                 lines.add(
                         Component.literal(e.count + "x " + name)
@@ -275,7 +319,6 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
             }
         }
 
-        // Convert to visual order and draw
         List<FormattedCharSequence> visual = lines.stream()
                 .map(Component::getVisualOrderText)
                 .toList();
@@ -283,39 +326,77 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         guiGraphics.renderTooltip(this.font, visual, mouseX, mouseY);
     }
 
+    /**
+     * Checks if a tier is unlocked on the client side.
+     *
+     * @param tierIndex the tier index to check
+     * @return true if the tier is unlocked
+     */
     private boolean isTierUnlockedClient(int tierIndex) {
-        // clamp
         tierIndex = Math.max(0, Math.min(tierIndex, PlushBlockEntity.MAX_TIER - 1));
 
         int required = PlushTierConfigManager.getRequiredCompletionsForTier(tierIndex);
 
-        // Tier 0 or anything with required <= 0 is always usable
         if (required <= 0 || tierIndex == 0) {
             return true;
         }
 
-        // We defined locks in terms of completions of the *previous* tier
         int prevTierIndex = tierIndex - 1;
         int completedPrev = this.menu.blockEntity.getTierCompletions(prevTierIndex);
 
         return completedPrev >= required;
     }
 
-    /**
-     * Convert a config entry to an ItemStack for client-side display.
-     */
-    private ItemStack entryToStack(PlushItemEntry entry) {
-        if (entry == null || entry.id == null || entry.id.isEmpty()) {
-            return ItemStack.EMPTY;
-        }
+    // ==================== Overridden Methods ====================
 
-        Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(entry.id));
-        if (item == Items.AIR) {
-            return ItemStack.EMPTY;
-        }
+    @Override
+    protected void init() {
+        super.init();
 
-        int count = Math.max(1, entry.count);
-        return new ItemStack(item, count);
+        int left = this.leftPos;
+        int top = this.topPos;
+
+        String titleText = this.title.getString();
+        int titleWidth = this.font.width(titleText);
+
+        int dropdownX = left + TITLE_X + titleWidth + DROPDOWN_X_OFFSET;
+        int dropdownY = top + DROPDOWN_Y_OFFSET;
+
+        this.tierDropdown = new DropdownWidget(
+                dropdownX,
+                dropdownY,
+                DROPDOWN_WIDTH,
+                DROPDOWN_HEIGHT,
+                List.of(
+                        Component.literal("Tier 1"),
+                        Component.literal("Tier 2"),
+                        Component.literal("Tier 3"),
+                        Component.literal("Tier 4"),
+                        Component.literal("Tier 5")
+                ),
+                this::onTierSelected
+        );
+
+        int beTier = this.menu.blockEntity.getSelectedTier();
+        beTier = Math.max(0, Math.min(beTier, MAX_TIER_INDEX));
+        this.tierDropdown.setSelectedIndex(beTier);
+
+        int submitSlotX = left + SUBMIT_SLOT_GUI_X;
+        int submitSlotY = top + SUBMIT_SLOT_GUI_Y - BUTTON_Y_ADJUST;
+
+        this.addRenderableWidget(
+                Button.builder(Component.literal("R"), b -> onRefreshClicked())
+                        .bounds(submitSlotX - BUTTON_OFFSET, submitSlotY, BUTTON_SIZE, BUTTON_SIZE)
+                        .build()
+        );
+
+        this.addRenderableWidget(
+                Button.builder(Component.literal("✓"), b -> onSubmitClicked())
+                        .bounds(submitSlotX + BUTTON_SIZE, submitSlotY, BUTTON_SIZE, BUTTON_SIZE)
+                        .build()
+        );
+
+        this.addRenderableWidget(this.tierDropdown);
     }
 
     @Override
@@ -329,26 +410,22 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         }
     }
 
-    // ----- background -----
     @Override
     protected void renderBg(GuiGraphics guiGraphics, float partialTick, int mouseX, int mouseY) {
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
-        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.setShaderColor(SHADER_COLOR, SHADER_COLOR, SHADER_COLOR, SHADER_COLOR);
         RenderSystem.setShaderTexture(0, GUI_TEXTURE);
 
         int x = (width - this.imageWidth) / 2;
         int y = (height - this.imageHeight) / 2;
 
-        guiGraphics.blit(GUI_TEXTURE, x, y, 0, 0, this.imageWidth, this.imageHeight, 256, 256);
+        guiGraphics.blit(GUI_TEXTURE, x, y, 0, 0, this.imageWidth, this.imageHeight, TEXTURE_SIZE, TEXTURE_SIZE);
     }
 
-    // ----- labels (no super call = no duplicate titles/inventory) -----
     @Override
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        // Title once at top-left
-        guiGraphics.drawString(this.font, this.title, 8, 6, 0x404040, false);
+        guiGraphics.drawString(this.font, this.title, TITLE_X, TITLE_Y, LABEL_COLOR, false);
 
-        // Info about the plush in the last slot (same logic you had)
         int menuSlotIndex = this.menu.slots.size() - 2;
         ItemStack testItem = this.menu.getSlot(menuSlotIndex).getItem();
 
@@ -358,28 +435,15 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         } else {
             info = Component.literal(testItem.getCount() + "x " + testItem.getHoverName().getString());
         }
-        guiGraphics.drawString(this.font, info, 30, 30, 0x404040, false);
+        guiGraphics.drawString(this.font, info, INFO_X, INFO_Y, LABEL_COLOR, false);
 
         String rewardText = "Reward Pool";
         int rewardX = (this.imageWidth - this.font.width(rewardText)) / 2;
-        int rewardY = 47; // tweak up/down as needed to sit nicely above the big grey area
-        guiGraphics.drawString(this.font, rewardText, rewardX, rewardY, 0x404040, false);
+        guiGraphics.drawString(this.font, rewardText, rewardX, REWARD_LABEL_Y, LABEL_COLOR, false);
 
-        // Selected tier text under reward area
-        int tier = this.menu.blockEntity.getSelectedTier();
-//        guiGraphics.drawString(
-//                this.font,
-//                Component.literal("Selected tier: " + (tier + 1)),
-//                8,
-//                62,
-//                0x404040,
-//                false
-//        );
-
-        // Inventory label once, just above first row of player slots
-        int firstInvRowY = 84 + PlushMenu.INVENTORY_OFFSET_Y; // same as addPlayerInventory
-        int invLabelY = firstInvRowY - 12;
-        guiGraphics.drawString(this.font, this.playerInventoryTitle, 8, invLabelY, 0x404040, false);
+        int firstInvRowY = 84 + PlushMenu.INVENTORY_OFFSET_Y;
+        int invLabelY = firstInvRowY - INV_LABEL_OFFSET;
+        guiGraphics.drawString(this.font, this.playerInventoryTitle, TITLE_X, invLabelY, LABEL_COLOR, false);
     }
 
     @Override
@@ -387,17 +451,12 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
-        // Render again so it's above the dropdown
         if (this.tierDropdown != null) {
             this.tierDropdown.render(guiGraphics, mouseX, mouseY, partialTick);
         }
 
-        // draw ghost reward items & their tooltips
         renderRewardPool(guiGraphics, mouseX, mouseY);
-
-        // tier requirements preview when hovering dropdown
         renderTierPreviewTooltip(guiGraphics, mouseX, mouseY);
-
         this.renderTooltip(guiGraphics, mouseX, mouseY);
     }
 }
