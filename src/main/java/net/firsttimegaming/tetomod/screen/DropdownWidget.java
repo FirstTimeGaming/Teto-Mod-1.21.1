@@ -1,4 +1,4 @@
-package net.firsttimegaming.tetomod.client.widget;
+package net.firsttimegaming.tetomod.screen;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
