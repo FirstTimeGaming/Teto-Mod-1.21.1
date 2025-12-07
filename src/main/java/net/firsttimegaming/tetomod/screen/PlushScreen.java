@@ -3,7 +3,6 @@ package net.firsttimegaming.tetomod.screen;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.firsttimegaming.tetomod.TetoMod;
 import net.firsttimegaming.tetomod.block.entity.PlushBlockEntity;
-import net.firsttimegaming.tetomod.client.widget.DropdownWidget;
 import net.firsttimegaming.tetomod.config.PlushItemEntry;
 import net.firsttimegaming.tetomod.config.PlushTierConfig;
 import net.firsttimegaming.tetomod.config.PlushTierConfigManager;

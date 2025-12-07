@@ -1,7 +1,8 @@
 {
   "variants": {
-    "": {
-      "model": "tetomod:block/tetoblock"
-    }
+    "facing=north": { "model": "tetomod:block/tetoblock" },
+    "facing=south": { "model": "tetomod:block/tetoblock", "y": 180 },
+    "facing=west":  { "model": "tetomod:block/tetoblock", "y": 270 },
+    "facing=east":  { "model": "tetomod:block/tetoblock", "y": 90 }
   }
 }
