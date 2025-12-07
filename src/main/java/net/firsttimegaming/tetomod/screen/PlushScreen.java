@@ -118,6 +118,9 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
     /** Maximum tier index for clamping. */
     private static final int MAX_TIER_INDEX = 4;
 
+    /** The refresh button widget. */
+    private Button refreshButton;
+
     /** The tier selection dropdown widget. */
     private DropdownWidget tierDropdown;
 
@@ -346,6 +349,14 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         return completedPrev >= required;
     }
 
+    private boolean isMouseOverRefresh(int mouseX, int mouseY) {
+        if (refreshButton == null) return false;
+        return mouseX >= refreshButton.getX() &&
+                mouseX < refreshButton.getX() + refreshButton.getWidth() &&
+                mouseY >= refreshButton.getY() &&
+                mouseY < refreshButton.getY() + refreshButton.getHeight();
+    }
+
     // ==================== Overridden Methods ====================
 
     @Override
@@ -383,11 +394,11 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         int submitSlotX = left + SUBMIT_SLOT_GUI_X;
         int submitSlotY = top + SUBMIT_SLOT_GUI_Y - BUTTON_Y_ADJUST;
 
-        this.addRenderableWidget(
-                Button.builder(Component.literal("R"), b -> onRefreshClicked())
-                        .bounds(submitSlotX - BUTTON_OFFSET, submitSlotY, BUTTON_SIZE, BUTTON_SIZE)
-                        .build()
-        );
+        this.refreshButton = Button.builder(Component.literal("R"), b -> onRefreshClicked())
+                .bounds(submitSlotX - BUTTON_OFFSET, submitSlotY, BUTTON_SIZE, BUTTON_SIZE)
+                .build();
+
+        this.addRenderableWidget(this.refreshButton);
 
         this.addRenderableWidget(
                 Button.builder(Component.literal("✓"), b -> onSubmitClicked())
@@ -406,6 +417,11 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
             if (this.tierDropdown.getSelectedIndex() != beTier) {
                 this.tierDropdown.setSelectedIndex(beTier);
             }
+        }
+
+        if (this.refreshButton != null) {
+            long remaining = this.menu.blockEntity.getRerollCooldownRemainingTicks();
+            this.refreshButton.active = (remaining <= 0);
         }
     }
 
@@ -452,6 +468,33 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
 
         if (this.tierDropdown != null) {
             this.tierDropdown.render(guiGraphics, mouseX, mouseY, partialTick);
+        }
+
+        if (this.refreshButton != null &&
+                this.isMouseOverRefresh(mouseX, mouseY)) {
+
+            long remaining = this.menu.blockEntity.getRerollCooldownRemainingTicks();
+
+            if (remaining <= 0) {
+                guiGraphics.renderTooltip(
+                        this.font,
+                        Component.literal("Reroll requirement"),
+                        mouseX, mouseY
+                );
+            } else {
+                long seconds = remaining / 20L;
+                long minutes = seconds / 60L;
+                long secR = seconds % 60L;
+
+                guiGraphics.renderTooltip(
+                        this.font,
+                        Component.literal(
+                                "Reroll on cooldown (" +
+                                        minutes + "m " + secR + "s remaining)"
+                        ),
+                        mouseX, mouseY
+                );
+            }
         }
 
         renderRewardPool(guiGraphics, mouseX, mouseY);

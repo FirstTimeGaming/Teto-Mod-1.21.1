@@ -182,7 +182,7 @@ public class PlushMenu extends AbstractContainerMenu {
     @Override
     public boolean clickMenuButton(Player player, int id) {
         if (id == BUTTON_REROLL) {
-            this.blockEntity.rollRandomRewardIntoSlot0();
+            this.blockEntity.tryReroll(player);
             return true;
         }
 

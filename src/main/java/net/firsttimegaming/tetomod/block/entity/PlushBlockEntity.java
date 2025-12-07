@@ -86,6 +86,12 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
     /** NBT key for item weight in cached rewards. */
     private static final String NBT_ITEM_WEIGHT = "weight";
 
+    /** NBT key for last reroll time. */
+    private static final String NBT_LAST_REOLL_TIME = "LastRerollTime";
+
+    /** Cooldown time in ticks for rerolling the required item. */
+    private static final long REROLL_COOLDOWN_TICKS = 30L * 60L * 20L;
+
     /** Sound volume for XP pickup sound. */
     private static final float SOUND_VOLUME = 1.0F;
 
@@ -97,6 +103,9 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
 
     /** Center offset for item drop position. */
     private static final double DROP_CENTER_OFFSET = 0.5;
+
+    /** The last game time when a reroll was performed. */
+    private long lastRerollGameTime = 0L;
 
     /** The currently selected tier index (0-based). */
     private int selectedTier = 0;
@@ -215,7 +224,7 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
             if (level != null && !level.isClientSide()) {
                 PlushItemEntry existingItem = cachedRewards.get(selectedTier);
                 if (existingItem == null) {
-                    rollRandomRewardIntoSlot0();
+                    doReroll();
                 } else {
                     ItemStack stack = ItemStackUtils.toStack(existingItem);
                     inventory.setStackInSlot(SLOT_REQUIREMENT, stack);
@@ -236,7 +245,7 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
      * stores it in the tier cache, and places it in the requirement slot.
      * This determines what item the player needs to submit for the current tier.
      */
-    public void rollRandomRewardIntoSlot0() {
+    public void doReroll() {
         if (level == null || level.isClientSide()) {
             return;
         }
@@ -270,6 +279,39 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
 
         setChanged();
         level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+    }
+
+    /**
+     * Attempts to reroll the required item, respecting a 30-minute cooldown.
+     *
+     * @return true if a reroll happened, false if on cooldown or invalid.
+     */
+    public boolean tryReroll(Player player) {
+        if (level == null || level.isClientSide()) {
+            return false;
+        }
+
+        long now = level.getGameTime();
+        long readyAt = lastRerollGameTime + REROLL_COOLDOWN_TICKS;
+
+        if (now < readyAt) {
+            return false;
+        }
+
+        lastRerollGameTime = now;
+        doReroll();
+        return true;
+    }
+
+    /**
+     * @return remaining cooldown in ticks, or 0 if ready
+     */
+    public long getRerollCooldownRemainingTicks() {
+        if (level == null) return 0L;
+        long now = level.getGameTime();
+        long readyAt = lastRerollGameTime + REROLL_COOLDOWN_TICKS;
+        long remaining = readyAt - now;
+        return Math.max(0L, remaining);
     }
 
 
@@ -354,7 +396,7 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         }
 
         incrementTierCompletions(this.selectedTier);
-        rollRandomRewardIntoSlot0();
+        doReroll();
 
         setChanged();
         level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
@@ -546,6 +588,7 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         super.saveAdditional(tag, registries);
         tag.put(NBT_INVENTORY, inventory.serializeNBT(registries));
         tag.putInt(NBT_SELECTED_TIER, this.selectedTier);
+        tag.putLong(NBT_LAST_REOLL_TIME, this.lastRerollGameTime);
 
         CompoundTag cacheTag = new CompoundTag();
         for (Map.Entry<Integer, PlushItemEntry> e : cachedRewards.entrySet()) {
@@ -575,6 +618,12 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
 
         if (tag.contains(NBT_SELECTED_TIER)) {
             this.selectedTier = tag.getInt(NBT_SELECTED_TIER);
+        }
+
+        if (tag.contains(NBT_LAST_REOLL_TIME)) {
+            this.lastRerollGameTime = tag.getLong(NBT_LAST_REOLL_TIME);
+        } else {
+            this.lastRerollGameTime = 0L;
         }
 
         cachedRewards.clear();
