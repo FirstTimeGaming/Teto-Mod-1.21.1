@@ -232,7 +232,8 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
     // ==================== Custom Methods ====================
 
     /**
-     * Rolls a random required item from the current tier's item pool and places it in the requirement slot.
+     * Rolls a random required item from the current tier's item pool,
+     * stores it in the tier cache, and places it in the requirement slot.
      * This determines what item the player needs to submit for the current tier.
      */
     public void rollRandomRewardIntoSlot0() {
@@ -240,13 +241,37 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
             return;
         }
 
+        int tierIndex = Math.max(0, Math.min(this.selectedTier, MAX_TIER - 1));
+
         PlushTierConfig tierConfig = getCurrentTierConfig();
         List<PlushItemEntry> pool = tierConfig.itemsToGive;
 
+        if (pool == null || pool.isEmpty()) {
+            inventory.setStackInSlot(SLOT_REQUIREMENT, ItemStack.EMPTY);
+            cachedRewards.remove(tierIndex);
+            setChanged();
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+            return;
+        }
+
         PlushItemEntry chosen = pickWeightedWithMinWeight(pool);
+        if (chosen == null) {
+            inventory.setStackInSlot(SLOT_REQUIREMENT, ItemStack.EMPTY);
+            cachedRewards.remove(tierIndex);
+            setChanged();
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+            return;
+        }
+
+        cachedRewards.put(tierIndex, chosen);
+
         ItemStack stack = ItemStackUtils.toStack(chosen);
         inventory.setStackInSlot(SLOT_REQUIREMENT, stack);
+
+        setChanged();
+        level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
     }
+
 
     /**
      * Clears the requirement slot contents.
