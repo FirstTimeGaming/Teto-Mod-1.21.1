@@ -387,7 +387,7 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
                 this::onTierSelected
         );
 
-        int beTier = this.menu.blockEntity.getSelectedTier();
+        int beTier = this.menu.getSelectedTier();
         beTier = Math.max(0, Math.min(beTier, MAX_TIER_INDEX));
         this.tierDropdown.setSelectedIndex(beTier);
 
@@ -412,11 +412,11 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
     @Override
     protected void containerTick() {
         super.containerTick();
-        if (this.tierDropdown != null) {
-            int beTier = this.menu.blockEntity.getSelectedTier();
-            if (this.tierDropdown.getSelectedIndex() != beTier) {
-                this.tierDropdown.setSelectedIndex(beTier);
-            }
+
+        int serverTier = this.menu.getSelectedTier();
+
+        if (this.tierDropdown != null && this.tierDropdown.getSelectedIndex() != serverTier) {
+            this.tierDropdown.setSelectedIndex(serverTier);
         }
 
         if (this.refreshButton != null) {

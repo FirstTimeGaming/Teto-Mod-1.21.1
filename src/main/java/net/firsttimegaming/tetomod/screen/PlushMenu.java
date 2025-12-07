@@ -8,6 +8,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerLevelAccess;
+import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -93,6 +94,21 @@ public class PlushMenu extends AbstractContainerMenu {
     /** The level (world) this menu is in. */
     public final Level level;
 
+    /** Data slot for synchronizing the selected tier between server and client. */
+    private final DataSlot selectedTierData = new DataSlot() {
+        @Override
+        public int get() {
+            // SERVER -> send to client
+            return blockEntity.getSelectedTier();
+        }
+
+        @Override
+        public void set(int value) {
+            // CLIENT -> receive updated value from server
+            blockEntity.clientSetSelectedTier(value);
+        }
+    };
+
     // ==================== Constructors ====================
 
     /**
@@ -145,6 +161,8 @@ public class PlushMenu extends AbstractContainerMenu {
                 return true;
             }
         });
+
+        this.addDataSlot(selectedTierData);
     }
 
     // ==================== Custom Methods ====================
@@ -203,6 +221,10 @@ public class PlushMenu extends AbstractContainerMenu {
         }
 
         return false;
+    }
+
+    public int getSelectedTier() {
+        return selectedTierData.get();
     }
 
     @Override

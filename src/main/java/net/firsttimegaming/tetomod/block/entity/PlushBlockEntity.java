@@ -1,5 +1,6 @@
 package net.firsttimegaming.tetomod.block.entity;
 
+import net.firsttimegaming.tetomod.TetoMod;
 import net.firsttimegaming.tetomod.config.PlushItemEntry;
 import net.firsttimegaming.tetomod.config.PlushTierConfig;
 import net.firsttimegaming.tetomod.config.PlushTierConfigManager;
@@ -219,6 +220,7 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         tier = Math.max(0, Math.min(tier, MAX_TIER - 1));
 
         if (this.selectedTier != tier) {
+
             this.selectedTier = tier;
 
             if (level != null && !level.isClientSide()) {
@@ -548,6 +550,11 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         }
 
         return null;
+    }
+
+    public void clientSetSelectedTier(int tier) {
+        tier = Math.max(0, Math.min(tier, MAX_TIER - 1));
+        this.selectedTier = tier;
     }
 
     // ==================== Overridden Methods ====================
