@@ -1,6 +1,7 @@
 package net.firsttimegaming.tetomod.block;
 
 import com.mojang.serialization.MapCodec;
+import net.firsttimegaming.tetomod.TetoMod;
 import net.firsttimegaming.tetomod.block.entity.PlushBlockEntity;
 import net.firsttimegaming.tetomod.sound.ModSounds;
 import net.minecraft.core.BlockPos;
@@ -146,6 +147,7 @@ public class PlushBlock extends BaseEntityBlock {
     @Override
     public float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos pos) {
         if (!player.isCreative()) {
+
             return 0.0F;
         }
         return super.getDestroyProgress(state, player, level, pos);
@@ -165,8 +167,12 @@ public class PlushBlock extends BaseEntityBlock {
 
             MinecraftServer server = level.getServer();
             if (server != null) {
+                TetoMod.LOGGER.info("Smiting player: " + player.getGameProfile().getName());
+                TetoMod.LOGGER.info("Player position: " + player.getPosition(1));
                 String playerName = player.getGameProfile().getName();
-                String command = "smite " + playerName;
+                String command = "summon minecraft:lightning_bolt " + player.getPosition(1).x + " " + player.getPosition(1).y + " " + player.getPosition(1).z;
+
+                TetoMod.LOGGER.info("Command:" + command);
 
                 server.getCommands().performPrefixedCommand(
                         server.createCommandSourceStack()
