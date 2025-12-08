@@ -1,0 +1,64 @@
+{
+  "plush.trade_success": {
+    "subtitle": "tetomod.subtitle.plush.trade_success",
+    "sounds": [
+      "tetomod:plush/trade_success"
+    ]
+  },
+
+  "plush.trade_fail": {
+    "subtitle": "tetomod.subtitle.plush.trade_fail",
+    "sounds": [
+      "tetomod:plush/trade_fail"
+    ]
+  },
+
+  "plush.upgrade_success": {
+    "subtitle": "tetomod.subtitle.plush.upgrade_success",
+    "sounds": [
+      "tetomod:plush/upgrade_success"
+    ]
+  },
+
+  "plush.upgrade_fail": {
+    "subtitle": "tetomod.subtitle.plush.upgrade_fail",
+    "sounds": [
+      "tetomod:plush/upgrade_fail"
+    ]
+  },
+
+  "plush.reroll_quest_1": {
+    "subtitle": "tetomod.subtitle.plush.reroll_quest_1",
+    "sounds": [
+      "tetomod:plush/reroll_quest_1"
+    ]
+  },
+
+  "plush.reroll_quest_2": {
+    "subtitle": "tetomod.subtitle.plush.reroll_quest_2",
+    "sounds": [
+      "tetomod:plush/reroll_quest_2"
+    ]
+  },
+
+  "plush.reroll_quest_3": {
+    "subtitle": "tetomod.subtitle.plush.reroll_quest_3",
+    "sounds": [
+      "tetomod:plush/reroll_quest_3"
+    ]
+  },
+
+  "plush.attacked": {
+    "subtitle": "tetomod.subtitle.plush.attacked",
+    "sounds": [
+      "tetomod:plush/attacked"
+    ]
+  },
+
+  "plush.ambient_1": {
+    "subtitle": "tetomod.subtitle.plush.ambient_1",
+    "sounds": [
+      "tetomod:plush/ambient_1"
+    ]
+  }
+}

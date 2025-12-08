@@ -2,10 +2,13 @@ package net.firsttimegaming.tetomod.block;
 
 import com.mojang.serialization.MapCodec;
 import net.firsttimegaming.tetomod.block.entity.PlushBlockEntity;
+import net.firsttimegaming.tetomod.sound.ModSounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.SimpleMenuProvider;
@@ -24,6 +27,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
+
 
 /**
  * A decorative plush block that provides a tiered trading interface.
@@ -125,11 +129,55 @@ public class PlushBlock extends BaseEntityBlock {
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (level.getBlockEntity(pos) instanceof PlushBlockEntity plushBlockEntity) {
             if (!level.isClientSide()) {
-                ((ServerPlayer) player).openMenu(new SimpleMenuProvider(plushBlockEntity, Component.literal(MENU_TITLE)), pos);
+//                ((ServerPlayer) player).openMenu(new SimpleMenuProvider(plushBlockEntity, Component.literal(MENU_TITLE)), pos);
+                if (player instanceof ServerPlayer serverPlayer) {
+                    // PlushBlockEntity implements MenuProvider, so we can use it directly
+                    serverPlayer.openMenu(
+                            plushBlockEntity,
+                            buf -> buf.writeBlockPos(pos)  // this feeds your PlushMenu(FriendlyByteBuf) constructor
+                    );
+                }
                 return ItemInteractionResult.SUCCESS;
             }
         }
         return ItemInteractionResult.SUCCESS;
+    }
+
+    @Override
+    public float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos pos) {
+        if (!player.isCreative()) {
+            return 0.0F;
+        }
+        return super.getDestroyProgress(state, player, level, pos);
+    }
+
+    @Override
+    public void attack(BlockState state, Level level, BlockPos pos, Player player) {
+        if (!level.isClientSide && !player.isCreative()) {
+            level.playSound(
+                    null,
+                    pos,
+                    ModSounds.PLUSH_ATTACKED.get(),
+                    SoundSource.BLOCKS,
+                    1.0F,
+                    1.0F
+            );
+
+            MinecraftServer server = level.getServer();
+            if (server != null) {
+                String playerName = player.getGameProfile().getName();
+                String command = "smite " + playerName;
+
+                server.getCommands().performPrefixedCommand(
+                        server.createCommandSourceStack()
+                                .withPermission(4)
+                                .withSuppressedOutput(),
+                        command
+                );
+            }
+        }
+
+        super.attack(state, level, pos, player);
     }
 
     @Override

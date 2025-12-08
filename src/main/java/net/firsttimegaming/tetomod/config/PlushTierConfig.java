@@ -27,6 +27,11 @@ public class PlushTierConfig {
     public List<PlushItemEntry> itemsToReceive = new ArrayList<>();
 
     /**
+     * The specific item that is required to complete this tier.
+     */
+    public PlushItemEntry unlockRequirement;
+
+    /**
      * Default constructor for GSON deserialization.
      */
     public PlushTierConfig() {

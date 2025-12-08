@@ -7,6 +7,7 @@ import net.firsttimegaming.tetomod.item.ModCreativeModeTabs;
 import net.firsttimegaming.tetomod.item.ModItems;
 import net.firsttimegaming.tetomod.screen.ModMenuTypes;
 import net.firsttimegaming.tetomod.screen.PlushScreen;
+import net.firsttimegaming.tetomod.sound.ModSounds;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import org.slf4j.Logger;
 import com.mojang.logging.LogUtils;
@@ -58,12 +59,11 @@ public class TetoMod {
         ModBlocks.register(modEventBus);
         ModBlockEntities.register(modEventBus);
         ModMenuTypes.register(modEventBus);
+        ModSounds.register(modEventBus);
 
         PlushTierConfigManager.load();
 
         modEventBus.addListener(this::addCreative);
-
-        modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
     }
 
     /**

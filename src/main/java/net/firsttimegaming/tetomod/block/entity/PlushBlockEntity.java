@@ -5,6 +5,7 @@ import net.firsttimegaming.tetomod.config.PlushItemEntry;
 import net.firsttimegaming.tetomod.config.PlushTierConfig;
 import net.firsttimegaming.tetomod.config.PlushTierConfigManager;
 import net.firsttimegaming.tetomod.screen.PlushMenu;
+import net.firsttimegaming.tetomod.sound.ModSounds;
 import net.firsttimegaming.tetomod.util.ItemStackUtils;
 import net.firsttimegaming.tetomod.util.WeightedRandomUtils;
 import net.minecraft.core.BlockPos;
@@ -49,13 +50,16 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
     public static final int MAX_TIER = 5;
 
     /** The number of inventory slots in the plush block. */
-    public static final int INVENTORY_SIZE = 2;
+    public static final int INVENTORY_SIZE = 3;
 
     /** Slot index for the required item display. */
     public static final int SLOT_REQUIREMENT = 0;
 
     /** Slot index for player item submission. */
     public static final int SLOT_SUBMIT = 1;
+
+    /** Slot index for upgrade items. */
+    public static final int SLOT_UPGRADE = 2;
 
     /** Default stack size limit for inventory slots. */
     private static final int DEFAULT_STACK_LIMIT = 64;
@@ -74,6 +78,9 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
 
     /** NBT key for storing tier completion counts. */
     private static final String NBT_TIER_COMPLETIONS = "TierCompletions";
+
+    /** NBT key for storing the maximum unlocked tier. */
+    private static final String NBT_MAX_UNLOCKED_TIER = "MaxUnlockedTier";
 
     /** NBT key prefix for individual tier entries. */
     private static final String NBT_TIER_PREFIX = "tier_";
@@ -110,6 +117,9 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
 
     /** The currently selected tier index (0-based). */
     private int selectedTier = 0;
+
+    /** The highest tier unlocked based on completions. */
+    private int maxUnlockedTier = 0;
 
     /** Cached reward entries per tier to ensure consistency within a session. */
     private final Map<Integer, PlushItemEntry> cachedRewards = new HashMap<>();
@@ -206,6 +216,25 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         return ItemStackUtils.toStack(entry);
     }
 
+    /**
+     * Gets the highest tier index that has been unlocked.
+     *
+     * @return the maximum unlocked tier index (0-based)
+     */
+    public int getMaxUnlockedTier() {
+        return maxUnlockedTier;
+    }
+
+    /**
+     * Checks if the specified tier is unlocked.
+     *
+     * @param tierIndex the tier index to check (0-based)
+     * @return true if the tier is unlocked, false otherwise
+     */
+    public boolean isTierUnlocked(int tierIndex) {
+        return tierIndex >= 0 && tierIndex <= maxUnlockedTier;
+    }
+
     // ==================== Setter Methods ====================
 
     /**
@@ -220,6 +249,18 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         tier = Math.max(0, Math.min(tier, MAX_TIER - 1));
 
         if (this.selectedTier != tier) {
+
+            if (level != null && !level.isClientSide()) {
+                TetoMod.LOGGER.info(
+                        "[SERVER-PlushBE.setSelectedTier] pos={} oldTier={} newTier={}",
+                        this.worldPosition, this.selectedTier, tier
+                );
+            } else if (level != null) {
+                TetoMod.LOGGER.info(
+                        "[CLIENT-PlushBE.setSelectedTier] pos={} oldTier={} newTier={}",
+                        this.worldPosition, this.selectedTier, tier
+                );
+            }
 
             this.selectedTier = tier;
 
@@ -281,6 +322,15 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
 
         setChanged();
         level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+
+        level.playSound(
+                null,
+                worldPosition,
+                ModSounds.getRandomRerollSound(),
+                SoundSource.BLOCKS,
+                1.0F,
+                1.0F
+        );
     }
 
     /**
@@ -360,19 +410,44 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         ItemStack offered = inventory.getStackInSlot(SLOT_SUBMIT);
 
         if (required.isEmpty() || offered.isEmpty()) {
+            level.playSound(
+                    null,
+                    worldPosition,
+                    ModSounds.PLUSH_TRADE_FAIL.get(),
+                    SoundSource.BLOCKS,
+                    1.0F,
+                    1.0F
+            );
             return;
         }
 
         if (!ItemStack.isSameItemSameComponents(required, offered)) {
+            level.playSound(
+                    null,
+                    worldPosition,
+                    ModSounds.PLUSH_TRADE_FAIL.get(),
+                    SoundSource.BLOCKS,
+                    1.0F,
+                    1.0F
+            );
             return;
         }
 
         int requiredCount = required.getCount();
         if (offered.getCount() < requiredCount) {
+            level.playSound(
+                    null,
+                    worldPosition,
+                    ModSounds.PLUSH_TRADE_FAIL.get(),
+                    SoundSource.BLOCKS,
+                    1.0F,
+                    1.0F
+            );
             return;
         }
 
         offered.shrink(requiredCount);
+
         if (offered.isEmpty()) {
             inventory.setStackInSlot(SLOT_SUBMIT, ItemStack.EMPTY);
         } else {
@@ -382,7 +457,7 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         level.playSound(
                 null,
                 worldPosition,
-                SoundEvents.EXPERIENCE_ORB_PICKUP,
+                ModSounds.PLUSH_TRADE_SUCCESS.get(),
                 SoundSource.BLOCKS,
                 SOUND_VOLUME,
                 SOUND_PITCH
@@ -405,6 +480,104 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
     }
 
     /**
+     * Handles the upgrade action to unlock the next tier.
+     * <p>
+     * This method:
+     * <ul>
+     *   <li>Validates that the correct upgrade item is present in the upgrade slot</li>
+     *   <li>Consumes the required amount from the upgrade slot</li>
+     *   <li>Marks the next tier as unlocked</li>
+     *   <li>Optionally switches to the newly unlocked tier</li>
+     *   <li>Plays an upgrade completion sound</li>
+     * </ul>
+     *
+     * @param player the player performing the upgrade
+     */
+    public void handleUpgrade(Player player) {
+        if (level == null || level.isClientSide()) return;
+
+        // Next tier after the highest unlocked one
+        int targetTier = maxUnlockedTier + 1;
+        if (targetTier >= MAX_TIER) {
+            if (player != null) {
+                player.displayClientMessage(
+                        Component.literal("All tiers are already unlocked."), true
+                );
+            }
+            return;
+        }
+
+        PlushItemEntry requirement = PlushTierConfigManager.getUnlockRequirementForTier(targetTier);
+        if (requirement == null) {
+            if (player != null) {
+                player.displayClientMessage(
+                        Component.literal("Tier " + (targetTier + 1) + " has no unlock requirement."), true
+                );
+            }
+            return;
+        }
+
+        ItemStack upgradeStack = inventory.getStackInSlot(SLOT_UPGRADE);
+        if (upgradeStack.isEmpty()) {
+            if (player != null) {
+                player.displayClientMessage(
+                        Component.literal("Place the required upgrade item in the upgrade slot."), true
+                );
+            }
+            return;
+        }
+
+        // Check correct item + count
+        ItemStack reqStack = ItemStackUtils.toStack(requirement);
+        if (!ItemStack.isSameItemSameComponents(reqStack, upgradeStack) ||
+                upgradeStack.getCount() < requirement.count) {
+
+            if (player != null) {
+                player.displayClientMessage(
+                        Component.literal("Incorrect upgrade item. Need "
+                                + requirement.count + "x " + requirement.id),
+                        true
+                );
+            }
+            return;
+        }
+
+        // Consume items
+        upgradeStack.shrink(requirement.count);
+        if (upgradeStack.isEmpty()) {
+            inventory.setStackInSlot(SLOT_UPGRADE, ItemStack.EMPTY);
+        } else {
+            inventory.setStackInSlot(SLOT_UPGRADE, upgradeStack);
+        }
+
+        // Mark unlocked
+        this.maxUnlockedTier = targetTier;
+
+        // Optional: auto-switch to newly unlocked tier
+        this.setSelectedTier(targetTier);
+
+        // Play custom upgrade-complete sound
+        level.playSound(
+                null,
+                worldPosition,
+                ModSounds.PLUSH_UPGRADE_SUCCESS.get(), // you'll define this
+                SoundSource.BLOCKS,
+                1.0F,
+                1.0F
+        );
+
+        if (player != null) {
+            player.displayClientMessage(
+                    Component.literal("Unlocked Tier " + (targetTier + 1) + "!"), true
+            );
+        }
+
+        setChanged();
+        level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
+    }
+
+
+    /**
      * Increments the completion count for the specified tier.
      *
      * @param tier the tier index to increment (0-based)
@@ -414,6 +587,10 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
             int current = tierCompletions.getOrDefault(tier, 0);
             tierCompletions.put(tier, current + 1);
             setChanged();
+
+            if (level != null && !level.isClientSide()) {
+                level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
+            }
         }
     }
 
@@ -430,30 +607,26 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
     public boolean canUseTier(int tierIndex, @Nullable Player player) {
         tierIndex = Math.max(0, Math.min(tierIndex, MAX_TIER - 1));
 
-        int required = PlushTierConfigManager.getRequiredCompletionsForTier(tierIndex);
-
-        if (required <= 0 || tierIndex == 0) {
+        if (isTierUnlocked(tierIndex)) {
             return true;
         }
 
-        int prevTierIndex = tierIndex - 1;
-        int completedPrev = getTierCompletions(prevTierIndex);
-
-        boolean unlocked = completedPrev >= required;
-
-        if (!unlocked && player != null && !player.level().isClientSide()) {
-            int shortfall = required - completedPrev;
-            player.displayClientMessage(
-                    Component.literal(
-                            "Tier " + (tierIndex + 1) + " is locked. " +
-                                    "Complete Tier " + tierIndex + " " + shortfall + " more time"
-                                    + (shortfall == 1 ? "" : "s") + " to unlock."
-                    ),
-                    true
-            );
+        if (player != null && !player.level().isClientSide()) {
+            PlushItemEntry req = PlushTierConfigManager.getUnlockRequirementForTier(tierIndex);
+            if (req == null) {
+                player.displayClientMessage(
+                        Component.literal("Tier " + (tierIndex + 1) + " is locked."), true
+                );
+            } else {
+                player.displayClientMessage(
+                        Component.literal("Tier " + (tierIndex + 1) + " is locked. Unlock with "
+                                + req.count + "x " + req.id),
+                        true
+                );
+            }
         }
 
-        return unlocked;
+        return false;
     }
 
     /**
@@ -582,12 +755,25 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
     public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
         saveAdditional(tag, registries);
+
+        if (level != null && !level.isClientSide()) {
+            TetoMod.LOGGER.info(
+                    "[SERVER-PlushBE.getUpdateTag] pos={} selectedTier={} cachedRewardsKeys={}",
+                    this.worldPosition, this.selectedTier, this.cachedRewards.keySet()
+            );
+        }
+
         return tag;
     }
 
     @Override
     public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
         loadAdditional(tag, registries);
+
+        TetoMod.LOGGER.info(
+                "[CLIENT-PlushBE.handleUpdateTag] pos={} nbtTier={} be.selectedTier(afterLoad)={}",
+                this.worldPosition, tag.contains(NBT_SELECTED_TIER) ? tag.getInt(NBT_SELECTED_TIER) : -1, this.selectedTier
+        );
     }
 
     @Override
@@ -596,6 +782,7 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         tag.put(NBT_INVENTORY, inventory.serializeNBT(registries));
         tag.putInt(NBT_SELECTED_TIER, this.selectedTier);
         tag.putLong(NBT_LAST_REOLL_TIME, this.lastRerollGameTime);
+        tag.putInt(NBT_MAX_UNLOCKED_TIER, this.maxUnlockedTier);
 
         CompoundTag cacheTag = new CompoundTag();
         for (Map.Entry<Integer, PlushItemEntry> e : cachedRewards.entrySet()) {
@@ -631,6 +818,12 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
             this.lastRerollGameTime = tag.getLong(NBT_LAST_REOLL_TIME);
         } else {
             this.lastRerollGameTime = 0L;
+        }
+
+        if (tag.contains(NBT_MAX_UNLOCKED_TIER)) {
+            this.maxUnlockedTier = tag.getInt(NBT_MAX_UNLOCKED_TIER);
+        } else {
+            this.maxUnlockedTier = 0;
         }
 
         cachedRewards.clear();

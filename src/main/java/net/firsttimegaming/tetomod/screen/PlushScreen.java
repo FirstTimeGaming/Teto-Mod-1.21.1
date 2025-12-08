@@ -14,6 +14,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.Inventory;
@@ -35,7 +36,7 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
 
     /** The GUI background texture resource location. */
     private static final ResourceLocation GUI_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath(TetoMod.MOD_ID, "textures/gui/plush/place_holder_gui.png");
+            ResourceLocation.fromNamespaceAndPath(TetoMod.MOD_ID, "textures/gui/plush/plush_gui.png");
 
     /** GUI width in pixels. */
     private static final int GUI_WIDTH = 175;
@@ -93,6 +94,12 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
 
     /** Submit slot GUI Y position. */
     private static final int SUBMIT_SLOT_GUI_Y = 130;
+
+    /** Upgrade slot GUI X position. */
+    private static final int UPGRADE_SLOT_GUI_X = 9;
+
+    /** Upgrade slot GUI Y position. */
+    private static final int UPGRADE_SLOT_GUI_Y = 130;
 
     /** Button Y adjustment. */
     private static final int BUTTON_Y_ADJUST = 2;
@@ -252,6 +259,7 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
 
         int hoveredTierIndex = -1;
 
+        // Figure out which tier index is hovered
         if (this.tierDropdown.isOpen()) {
             int optionHeight = h;
             for (int i = 0; i < this.tierDropdown.getOptionCount(); i++) {
@@ -276,37 +284,53 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
             return;
         }
 
-        int required = PlushTierConfigManager.getRequiredCompletionsForTier(hoveredTierIndex);
+        // New: unlock requirement is an item, not completions
+        PlushItemEntry unlockReq = PlushTierConfigManager.getUnlockRequirementForTier(hoveredTierIndex);
         boolean unlocked = isTierUnlockedClient(hoveredTierIndex);
-
-        int prevTierIndex = Math.max(0, hoveredTierIndex - 1);
-        int completedPrev = this.menu.blockEntity.getTierCompletions(prevTierIndex);
 
         List<Component> lines = new ArrayList<>();
 
+        // Header: Tier N - Unlocked / Locked
         Component header = Component.literal("Tier " + (hoveredTierIndex + 1) + " - ")
                 .append(unlocked
                         ? Component.literal("Unlocked").withStyle(ChatFormatting.GREEN)
                         : Component.literal("Locked").withStyle(ChatFormatting.RED));
         lines.add(header);
 
-        if (hoveredTierIndex > 0 && required > 0) {
+        // Unlock info
+        if (hoveredTierIndex == 0 || unlockReq == null) {
+            // Tier 1 (or tiers with no requirement) = always available
+            lines.add(Component.literal("Unlock: Available by default")
+                    .withStyle(ChatFormatting.GRAY));
+        } else {
+            lines.add(Component.empty());
+            lines.add(Component.literal("Unlock requirement:")
+                    .withStyle(ChatFormatting.YELLOW));
+
+            ItemStack unlockStack = ItemStackUtils.toStack(unlockReq);
+            String unlockName = unlockStack.isEmpty()
+                    ? unlockReq.id
+                    : unlockStack.getHoverName().getString();
+
             lines.add(
-                    Component.literal("Progress: ")
-                            .append(Component.literal(completedPrev + "/" + required)
-                                    .withStyle(unlocked ? ChatFormatting.GREEN : ChatFormatting.YELLOW))
+                    Component.literal(unlockReq.count + "x " + unlockName)
+                            .withStyle(unlocked ? ChatFormatting.GRAY : ChatFormatting.RED)
             );
 
             if (!unlocked) {
                 lines.add(
-                        Component.literal("Complete Tier " + hoveredTierIndex + " to unlock.")
-                                .withStyle(ChatFormatting.GRAY)
+                        Component.literal("Place this in the upgrade slot and press Upgrade.")
+                                .withStyle(ChatFormatting.DARK_GRAY)
                 );
             }
         }
 
+        // Spacer
         lines.add(Component.empty());
-        lines.add(Component.literal("Required items:").withStyle(ChatFormatting.YELLOW));
+
+        // Required items (the quest pool)
+        lines.add(Component.literal("Required items:")
+                .withStyle(ChatFormatting.YELLOW));
 
         if (tierCfg.itemsToGive == null || tierCfg.itemsToGive.isEmpty()) {
             lines.add(Component.literal("None").withStyle(ChatFormatting.GRAY));
@@ -321,12 +345,14 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
             }
         }
 
+        // Convert to visual lines and render
         List<FormattedCharSequence> visual = lines.stream()
                 .map(Component::getVisualOrderText)
                 .toList();
 
         guiGraphics.renderTooltip(this.font, visual, mouseX, mouseY);
     }
+
 
     /**
      * Checks if a tier is unlocked on the client side.
@@ -336,18 +362,16 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
      */
     private boolean isTierUnlockedClient(int tierIndex) {
         tierIndex = Math.max(0, Math.min(tierIndex, PlushBlockEntity.MAX_TIER - 1));
+        boolean unlocked = this.menu.blockEntity.isTierUnlocked(tierIndex);
 
-        int required = PlushTierConfigManager.getRequiredCompletionsForTier(tierIndex);
+        TetoMod.LOGGER.info(
+                "[CLIENT-PlushScreen.isTierUnlockedClient] tier={} unlockedFromBE={}",
+                tierIndex, unlocked
+        );
 
-        if (required <= 0 || tierIndex == 0) {
-            return true;
-        }
-
-        int prevTierIndex = tierIndex - 1;
-        int completedPrev = this.menu.blockEntity.getTierCompletions(prevTierIndex);
-
-        return completedPrev >= required;
+        return unlocked;
     }
+
 
     private boolean isMouseOverRefresh(int mouseX, int mouseY) {
         if (refreshButton == null) return false;
@@ -357,7 +381,53 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
                 mouseY < refreshButton.getY() + refreshButton.getHeight();
     }
 
+    private void onUpgradeClicked() {
+        if (this.minecraft != null && this.minecraft.gameMode != null) {
+            // button id 2 is upgrade
+            this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 2);
+        }
+    }
+
+    private void rebuildTierDropdownOptions() {
+        if (this.tierDropdown == null) {
+            return;
+        }
+
+        int tierCount = 5; // or your constant
+        List<Component> labels = new ArrayList<>();
+
+        int beTier = this.menu.blockEntity.getSelectedTier();
+        TetoMod.LOGGER.info(
+                "[CLIENT-PlushScreen.rebuildTierDropdownOptions] pos={} beTier={}",
+                this.menu.blockEntity.getBlockPos(),
+                beTier
+        );
+
+        for (int i = 0; i < tierCount; i++) {
+            boolean unlocked = isTierUnlockedClient(i);
+
+            TetoMod.LOGGER.info(
+                    "[CLIENT-PlushScreen.rebuildTierDropdownOptions] tier={} unlocked={}",
+                    i, unlocked
+            );
+
+            Component label = unlocked
+                    ? Component.literal("Tier " + (i + 1))
+                    : Component.literal("Tier " + (i + 1) + " (Locked)");
+
+            labels.add(label);
+        }
+
+        this.tierDropdown.setOptions(labels);
+        this.tierDropdown.setSelectedIndex(beTier);
+    }
+
+
+
     // ==================== Overridden Methods ====================
+
+    private int lastLoggedBeTier = -999;
+    private int lastLoggedDropdownIndex = -999;
 
     @Override
     protected void init() {
@@ -406,7 +476,28 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
                         .build()
         );
 
+        int upgradeSlotX = left + UPGRADE_SLOT_GUI_X;
+        int upgradeSlotY = top + UPGRADE_SLOT_GUI_Y;
+
+        this.addRenderableWidget(
+                Button.builder(Component.literal("▲"), b -> onUpgradeClicked())
+                        .bounds(upgradeSlotX + 20, upgradeSlotY - 2, 20, 20)
+                        .build()
+        );
+
         this.addRenderableWidget(this.tierDropdown);
+
+        rebuildTierDropdownOptions();
+
+        if (this.tierDropdown != null) {
+            TetoMod.LOGGER.info(
+                    "[CLIENT-PlushScreen.init] pos={} beTier={} dropdownIndex={} label='{}'",
+                    this.menu.blockEntity.getBlockPos(),
+                    this.menu.blockEntity.getSelectedTier(),
+                    this.tierDropdown.getSelectedIndex(),
+                    this.tierDropdown.getMessage().getString()
+            );
+        }
     }
 
     @Override
@@ -417,6 +508,23 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
 
         if (this.tierDropdown != null && this.tierDropdown.getSelectedIndex() != serverTier) {
             this.tierDropdown.setSelectedIndex(serverTier);
+
+            rebuildTierDropdownOptions();
+
+            int beTier = this.menu.blockEntity.getSelectedTier();
+            int dropdownIndex = this.tierDropdown.getSelectedIndex();
+            if (beTier != lastLoggedBeTier || dropdownIndex != lastLoggedDropdownIndex) {
+                lastLoggedBeTier = beTier;
+                lastLoggedDropdownIndex = dropdownIndex;
+
+                TetoMod.LOGGER.info(
+                        "[CLIENT-PlushScreen.tick] pos={} beTier={} dropdownIndex={} label='{}'",
+                        this.menu.blockEntity.getBlockPos(),
+                        beTier,
+                        dropdownIndex,
+                        this.tierDropdown.getMessage().getString()
+                );
+            }
         }
 
         if (this.refreshButton != null) {
@@ -441,7 +549,7 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         guiGraphics.drawString(this.font, this.title, TITLE_X, TITLE_Y, LABEL_COLOR, false);
 
-        int menuSlotIndex = this.menu.slots.size() - 2;
+        int menuSlotIndex = this.menu.slots.size() - 3;
         ItemStack testItem = this.menu.getSlot(menuSlotIndex).getItem();
 
         Component info;

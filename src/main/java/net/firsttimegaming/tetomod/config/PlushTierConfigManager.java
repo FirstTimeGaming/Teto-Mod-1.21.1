@@ -106,6 +106,17 @@ public final class PlushTierConfigManager {
         return ROOT.tierLocks.getOrDefault(key, 0);
     }
 
+    /**
+     * Gets the specific item required to unlock a tier.
+     *
+     * @param tierIndex the tier index (0-based)
+     * @return the unlock requirement item, or null if none
+     */
+    public static PlushItemEntry getUnlockRequirementForTier(int tierIndex) {
+        PlushTierConfig tier = getTierConfig(tierIndex);
+        return tier.unlockRequirement;
+    }
+
     // ==================== Custom Methods ====================
 
     /**
@@ -183,6 +194,9 @@ public final class PlushTierConfigManager {
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:iron_ingot", 3, 2));
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:bread", 4, 2));
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:diamond", 1, 1));
+
+        tier.unlockRequirement = null;
+
         return tier;
     }
 
@@ -199,6 +213,9 @@ public final class PlushTierConfigManager {
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:gold_ingot", 3, 2));
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:experience_bottle", 4, 2));
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:diamond", 1, 1));
+
+        tier.unlockRequirement = new PlushItemEntry("minecraft:emerald", 1, 1);
+
         return tier;
     }
 
@@ -215,6 +232,9 @@ public final class PlushTierConfigManager {
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:emerald", 3, 2));
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:golden_apple", 1, 2));
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:enchanted_book", 1, 1));
+
+        tier.unlockRequirement = new PlushItemEntry("minecraft:diamond", 4, 1);
+
         return tier;
     }
 
@@ -231,6 +251,9 @@ public final class PlushTierConfigManager {
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:diamond_block", 1, 2));
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:shulker_shell", 2, 2));
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:enchanted_golden_apple", 1, 1));
+
+        tier.unlockRequirement = new PlushItemEntry("minecraft:netherite_scrap", 4, 1);
+
         return tier;
     }
 
@@ -247,6 +270,9 @@ public final class PlushTierConfigManager {
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:beacon", 1, 1));
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:netherite_ingot", 2, 2));
         tier.itemsToReceive.add(new PlushItemEntry("minecraft:dragon_egg", 1, 1));
+
+        tier.unlockRequirement = new PlushItemEntry("minecraft:netherite_ingot", 1, 1);
+
         return tier;
     }
 }

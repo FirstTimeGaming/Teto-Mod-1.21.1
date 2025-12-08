@@ -31,6 +31,9 @@ public class PlushMenu extends AbstractContainerMenu {
     /** Button ID for submitting items. */
     private static final int BUTTON_SUBMIT = 1;
 
+    /** Button ID for upgrading the plush tier. */
+    private static final int BUTTON_UPGRADE = 2;
+
     /** Starting button ID for tier selection (tier 0 = 10, tier 1 = 11, etc.). */
     private static final int BUTTON_TIER_BASE = 10;
 
@@ -48,6 +51,12 @@ public class PlushMenu extends AbstractContainerMenu {
 
     /** Y position for the submit slot in the GUI. */
     private static final int SUBMIT_SLOT_Y = 130;
+
+    /** X position for the upgrade slot in the GUI. */
+    private static final int UPGRADE_SLOT_X = 9;
+
+    /** Y position for the upgrade slot in the GUI. */
+    private static final int UPGRADE_SLOT_Y = 130;
 
     /** Number of slots in the player hotbar. */
     private static final int HOTBAR_SLOT_COUNT = 9;
@@ -121,6 +130,13 @@ public class PlushMenu extends AbstractContainerMenu {
      */
     public PlushMenu(int containerId, Inventory inv, FriendlyByteBuf extraData) {
         this(containerId, inv, inv.player.level().getBlockEntity(extraData.readBlockPos()));
+
+        TetoMod.LOGGER.info(
+                "[CLIENT-PlushMenu.ctor-BUF] containerId={} pos={} beTier={}",
+                containerId,
+                this.blockEntity.getBlockPos(),
+                this.blockEntity.getSelectedTier()
+        );
     }
 
     /**
@@ -162,7 +178,27 @@ public class PlushMenu extends AbstractContainerMenu {
             }
         });
 
+        this.addSlot(new SlotItemHandler(this.blockEntity.inventory, PlushBlockEntity.SLOT_UPGRADE, UPGRADE_SLOT_X, UPGRADE_SLOT_Y) {
+            @Override
+            public boolean mayPlace(ItemStack stack) {
+                return true;
+            }
+
+            @Override
+            public boolean mayPickup(Player playerIn) {
+                return true;
+            }
+        });
+
         this.addDataSlot(selectedTierData);
+
+        TetoMod.LOGGER.info(
+                "[{}-PlushMenu.ctor-BE] containerId={} pos={} beTier={}",
+                inv.player.level().isClientSide() ? "CLIENT" : "SERVER",
+                containerId,
+                this.blockEntity.getBlockPos(),
+                this.blockEntity.getSelectedTier()
+        );
     }
 
     // ==================== Custom Methods ====================
@@ -206,6 +242,11 @@ public class PlushMenu extends AbstractContainerMenu {
 
         if (id == BUTTON_SUBMIT) {
             this.blockEntity.handleSubmit(player);
+            return true;
+        }
+
+        if (id == BUTTON_UPGRADE) {
+            this.blockEntity.handleUpgrade(player);
             return true;
         }
 

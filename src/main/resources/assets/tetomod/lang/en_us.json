@@ -1,4 +1,13 @@
 {
   "block.tetomod.tetoblock": "Teto",
-  "creativetab.tetomod.tetotab": "Teto Mod"
+  "creativetab.tetomod.tetotab": "Teto Mod",
+  "tetomod.subtitle.plush.trade_success": "Plush trade completed",
+  "tetomod.subtitle.plush.trade_fail": "Plush trade failed",
+  "tetomod.subtitle.plush.upgrade_success": "Plush upgraded",
+  "tetomod.subtitle.plush.upgrade_fail": "Plush upgrade failed",
+  "tetomod.subtitle.plush.reroll_quest_1": "Plush reroll",
+  "tetomod.subtitle.plush.reroll_quest_2": "Plush reroll",
+  "tetomod.subtitle.plush.reroll_quest_3": "Plush reroll",
+  "tetomod.subtitle.plush.attacked": "Plush squeal",
+  "tetomod.subtitle.plush.ambient_1": "Plush hum"
 }

@@ -1,5 +1,6 @@
 package net.firsttimegaming.tetomod.screen;
 
+import net.firsttimegaming.tetomod.TetoMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -7,6 +8,7 @@ import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -49,8 +51,8 @@ public class DropdownWidget extends AbstractWidget {
     /** Offset from the right edge for the dropdown indicator. */
     private static final int INDICATOR_OFFSET = 8;
 
-    /** The list of selectable options. */
-    private final List<Component> options;
+    /** The list of selectable options (always mutable). */
+    private final List<Component> options = new ArrayList<>();
 
     /** Callback when the selection changes. */
     private final Consumer<Integer> onSelectionChanged;
@@ -77,35 +79,35 @@ public class DropdownWidget extends AbstractWidget {
                           List<Component> options,
                           Consumer<Integer> onSelectionChanged) {
         super(x, y, width, height, options.isEmpty() ? Component.empty() : options.get(0));
-        this.options = options;
+
+        // Copy into our own mutable list
+        if (options != null) {
+            this.options.addAll(options);
+        }
+
         this.onSelectionChanged = onSelectionChanged;
+
+        // Clamp initial selection
+        if (this.options.isEmpty()) {
+            this.selectedIndex = -1;
+        } else {
+            this.selectedIndex = 0;
+        }
     }
 
     // ==================== Getter Methods ====================
 
-    /**
-     * Gets the currently selected option index.
-     *
-     * @return the selected index
-     */
+    /** Gets the currently selected option index. */
     public int getSelectedIndex() {
         return selectedIndex;
     }
 
-    /**
-     * Gets the number of options in the dropdown.
-     *
-     * @return the option count
-     */
+    /** Gets the number of options in the dropdown. */
     public int getOptionCount() {
         return options.size();
     }
 
-    /**
-     * Checks if the dropdown is currently expanded.
-     *
-     * @return true if open, false otherwise
-     */
+    /** Checks if the dropdown is currently expanded. */
     public boolean isOpen() {
         return open;
     }
@@ -118,34 +120,71 @@ public class DropdownWidget extends AbstractWidget {
      * @param index the index to select
      */
     public void setSelectedIndex(int index) {
-        if (index >= 0 && index < options.size()) {
-            this.selectedIndex = index;
-            this.setMessage(options.get(index));
-            if (onSelectionChanged != null) {
-                onSelectionChanged.accept(index);
-            }
+        TetoMod.LOGGER.info(
+                "[CLIENT-Dropdown.setSelectedIndex] index={} optionsSize={}",
+                index, options.size()
+        );
+
+        if (index < 0 || index >= options.size()) {
+            return;
         }
+        this.selectedIndex = index;
+        this.setMessage(options.get(index));
+        if (onSelectionChanged != null) {
+            onSelectionChanged.accept(index);
+        }
+
+        TetoMod.LOGGER.info(
+                "[CLIENT-Dropdown.setSelectedIndex] newIndex={} label='{}'",
+                this.selectedIndex,
+                this.getMessage().getString()
+        );
+    }
+
+    /**
+     * Sets the list of options in the dropdown.
+     *
+     * @param newOptions the new list of options
+     */
+    public void setOptions(List<Component> newOptions) {
+        TetoMod.LOGGER.info(
+                "[CLIENT-Dropdown.setOptions] oldSize={} newSize={}",
+                this.options.size(),
+                (newOptions == null ? 0 : newOptions.size())
+        );
+
+        this.options.clear();
+        if (newOptions != null) {
+            this.options.addAll(newOptions);
+        }
+
+        // Re-clamp / update selection & label
+        if (this.options.isEmpty()) {
+            this.selectedIndex = -1;
+            this.setMessage(Component.empty());
+        } else {
+            if (this.selectedIndex < 0 || this.selectedIndex >= this.options.size()) {
+                this.selectedIndex = 0;
+            }
+            this.setMessage(this.options.get(this.selectedIndex));
+        }
+
+        TetoMod.LOGGER.info(
+                "[CLIENT-Dropdown.setOptions] finalSize={} selectedIndex={} label='{}'",
+                this.options.size(),
+                this.selectedIndex,
+                this.getMessage().getString()
+        );
     }
 
     // ==================== Custom Methods ====================
 
-    /**
-     * Closes the dropdown.
-     */
+    /** Closes the dropdown. */
     public void close() {
         this.open = false;
     }
 
-    /**
-     * Draws a border around the specified rectangle.
-     *
-     * @param g     the graphics context
-     * @param x1    left edge
-     * @param y1    top edge
-     * @param x2    right edge
-     * @param y2    bottom edge
-     * @param color the border color
-     */
+    /** Draws a border around the specified rectangle. */
     private void drawBorder(GuiGraphics g, int x1, int y1, int x2, int y2, int color) {
         g.fill(x1, y1, x2, y1 + BORDER_THICKNESS, color);
         g.fill(x1, y2 - BORDER_THICKNESS, x2, y2, color);
@@ -169,8 +208,8 @@ public class DropdownWidget extends AbstractWidget {
             drawBorder(guiGraphics, x, y, x + w, y + h, COLOR_HOVER);
         }
 
-        if (!options.isEmpty()) {
-            String text = this.getMessage().getString();
+        if (!options.isEmpty() && selectedIndex >= 0 && selectedIndex < options.size()) {
+            String text = options.get(selectedIndex).getString();
             int textY = y + (h - FONT_HEIGHT) / 2;
             guiGraphics.drawString(Minecraft.getInstance().font, text, x + TEXT_PADDING, textY, COLOR_TEXT, false);
         }
@@ -187,8 +226,13 @@ public class DropdownWidget extends AbstractWidget {
                 drawBorder(guiGraphics, x, oy, x + w, oy + optionHeight, COLOR_BORDER);
 
                 if (mouseX >= x && mouseX < x + w && mouseY >= oy && mouseY < oy + optionHeight) {
-                    guiGraphics.fill(x + BORDER_THICKNESS, oy + BORDER_THICKNESS,
-                            x + w - BORDER_THICKNESS, oy + optionHeight - BORDER_THICKNESS, COLOR_OPTION_HOVER);
+                    guiGraphics.fill(
+                            x + BORDER_THICKNESS,
+                            oy + BORDER_THICKNESS,
+                            x + w - BORDER_THICKNESS,
+                            oy + optionHeight - BORDER_THICKNESS,
+                            COLOR_OPTION_HOVER
+                    );
                 }
 
                 int optionTextY = oy + (optionHeight - FONT_HEIGHT) / 2;
@@ -244,9 +288,13 @@ public class DropdownWidget extends AbstractWidget {
     protected void updateWidgetNarration(NarrationElementOutput narrationElementOutput) {
         narrationElementOutput.add(NarratedElementType.TITLE, this.getMessage());
         if (!options.isEmpty() && selectedIndex >= 0 && selectedIndex < options.size()) {
-            narrationElementOutput.add(NarratedElementType.USAGE,
-                    Component.literal("Selected: " + options.get(selectedIndex).getString() +
-                            ". " + (open ? "Press to close dropdown" : "Press to open dropdown")));
+            narrationElementOutput.add(
+                    NarratedElementType.USAGE,
+                    Component.literal(
+                            "Selected: " + options.get(selectedIndex).getString() +
+                                    ". " + (open ? "Press to close dropdown" : "Press to open dropdown")
+                    )
+            );
         }
     }
 }
