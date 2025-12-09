@@ -364,11 +364,6 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         tierIndex = Math.max(0, Math.min(tierIndex, PlushBlockEntity.MAX_TIER - 1));
         boolean unlocked = this.menu.blockEntity.isTierUnlocked(tierIndex);
 
-        TetoMod.LOGGER.info(
-                "[CLIENT-PlushScreen.isTierUnlockedClient] tier={} unlockedFromBE={}",
-                tierIndex, unlocked
-        );
-
         return unlocked;
     }
 
@@ -397,19 +392,9 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         List<Component> labels = new ArrayList<>();
 
         int beTier = this.menu.blockEntity.getSelectedTier();
-        TetoMod.LOGGER.info(
-                "[CLIENT-PlushScreen.rebuildTierDropdownOptions] pos={} beTier={}",
-                this.menu.blockEntity.getBlockPos(),
-                beTier
-        );
 
         for (int i = 0; i < tierCount; i++) {
             boolean unlocked = isTierUnlockedClient(i);
-
-            TetoMod.LOGGER.info(
-                    "[CLIENT-PlushScreen.rebuildTierDropdownOptions] tier={} unlocked={}",
-                    i, unlocked
-            );
 
             Component label = unlocked
                     ? Component.literal("Tier " + (i + 1))
@@ -488,16 +473,6 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
         this.addRenderableWidget(this.tierDropdown);
 
         rebuildTierDropdownOptions();
-
-        if (this.tierDropdown != null) {
-            TetoMod.LOGGER.info(
-                    "[CLIENT-PlushScreen.init] pos={} beTier={} dropdownIndex={} label='{}'",
-                    this.menu.blockEntity.getBlockPos(),
-                    this.menu.blockEntity.getSelectedTier(),
-                    this.tierDropdown.getSelectedIndex(),
-                    this.tierDropdown.getMessage().getString()
-            );
-        }
     }
 
     @Override
@@ -516,14 +491,6 @@ public class PlushScreen extends AbstractContainerScreen<PlushMenu> {
             if (beTier != lastLoggedBeTier || dropdownIndex != lastLoggedDropdownIndex) {
                 lastLoggedBeTier = beTier;
                 lastLoggedDropdownIndex = dropdownIndex;
-
-                TetoMod.LOGGER.info(
-                        "[CLIENT-PlushScreen.tick] pos={} beTier={} dropdownIndex={} label='{}'",
-                        this.menu.blockEntity.getBlockPos(),
-                        beTier,
-                        dropdownIndex,
-                        this.tierDropdown.getMessage().getString()
-                );
             }
         }
 

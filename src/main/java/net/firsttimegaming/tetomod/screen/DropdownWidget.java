@@ -120,11 +120,6 @@ public class DropdownWidget extends AbstractWidget {
      * @param index the index to select
      */
     public void setSelectedIndex(int index) {
-        TetoMod.LOGGER.info(
-                "[CLIENT-Dropdown.setSelectedIndex] index={} optionsSize={}",
-                index, options.size()
-        );
-
         if (index < 0 || index >= options.size()) {
             return;
         }
@@ -133,12 +128,6 @@ public class DropdownWidget extends AbstractWidget {
         if (onSelectionChanged != null) {
             onSelectionChanged.accept(index);
         }
-
-        TetoMod.LOGGER.info(
-                "[CLIENT-Dropdown.setSelectedIndex] newIndex={} label='{}'",
-                this.selectedIndex,
-                this.getMessage().getString()
-        );
     }
 
     /**
@@ -147,12 +136,6 @@ public class DropdownWidget extends AbstractWidget {
      * @param newOptions the new list of options
      */
     public void setOptions(List<Component> newOptions) {
-        TetoMod.LOGGER.info(
-                "[CLIENT-Dropdown.setOptions] oldSize={} newSize={}",
-                this.options.size(),
-                (newOptions == null ? 0 : newOptions.size())
-        );
-
         this.options.clear();
         if (newOptions != null) {
             this.options.addAll(newOptions);
@@ -168,13 +151,6 @@ public class DropdownWidget extends AbstractWidget {
             }
             this.setMessage(this.options.get(this.selectedIndex));
         }
-
-        TetoMod.LOGGER.info(
-                "[CLIENT-Dropdown.setOptions] finalSize={} selectedIndex={} label='{}'",
-                this.options.size(),
-                this.selectedIndex,
-                this.getMessage().getString()
-        );
     }
 
     // ==================== Custom Methods ====================

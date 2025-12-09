@@ -130,13 +130,6 @@ public class PlushMenu extends AbstractContainerMenu {
      */
     public PlushMenu(int containerId, Inventory inv, FriendlyByteBuf extraData) {
         this(containerId, inv, inv.player.level().getBlockEntity(extraData.readBlockPos()));
-
-        TetoMod.LOGGER.info(
-                "[CLIENT-PlushMenu.ctor-BUF] containerId={} pos={} beTier={}",
-                containerId,
-                this.blockEntity.getBlockPos(),
-                this.blockEntity.getSelectedTier()
-        );
     }
 
     /**
@@ -191,14 +184,6 @@ public class PlushMenu extends AbstractContainerMenu {
         });
 
         this.addDataSlot(selectedTierData);
-
-        TetoMod.LOGGER.info(
-                "[{}-PlushMenu.ctor-BE] containerId={} pos={} beTier={}",
-                inv.player.level().isClientSide() ? "CLIENT" : "SERVER",
-                containerId,
-                this.blockEntity.getBlockPos(),
-                this.blockEntity.getSelectedTier()
-        );
     }
 
     // ==================== Custom Methods ====================

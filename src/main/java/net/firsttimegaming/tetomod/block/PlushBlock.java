@@ -167,12 +167,7 @@ public class PlushBlock extends BaseEntityBlock {
 
             MinecraftServer server = level.getServer();
             if (server != null) {
-                TetoMod.LOGGER.info("Smiting player: " + player.getGameProfile().getName());
-                TetoMod.LOGGER.info("Player position: " + player.getPosition(1));
-                String playerName = player.getGameProfile().getName();
                 String command = "summon minecraft:lightning_bolt " + player.getPosition(1).x + " " + player.getPosition(1).y + " " + player.getPosition(1).z;
-
-                TetoMod.LOGGER.info("Command:" + command);
 
                 server.getCommands().performPrefixedCommand(
                         server.createCommandSourceStack()

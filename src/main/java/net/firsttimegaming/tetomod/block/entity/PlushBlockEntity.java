@@ -249,25 +249,12 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         tier = Math.max(0, Math.min(tier, MAX_TIER - 1));
 
         if (this.selectedTier != tier) {
-
-            if (level != null && !level.isClientSide()) {
-                TetoMod.LOGGER.info(
-                        "[SERVER-PlushBE.setSelectedTier] pos={} oldTier={} newTier={}",
-                        this.worldPosition, this.selectedTier, tier
-                );
-            } else if (level != null) {
-                TetoMod.LOGGER.info(
-                        "[CLIENT-PlushBE.setSelectedTier] pos={} oldTier={} newTier={}",
-                        this.worldPosition, this.selectedTier, tier
-                );
-            }
-
             this.selectedTier = tier;
 
             if (level != null && !level.isClientSide()) {
                 PlushItemEntry existingItem = cachedRewards.get(selectedTier);
                 if (existingItem == null) {
-                    doReroll();
+                    doReroll(false);
                 } else {
                     ItemStack stack = ItemStackUtils.toStack(existingItem);
                     inventory.setStackInSlot(SLOT_REQUIREMENT, stack);
@@ -288,7 +275,7 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
      * stores it in the tier cache, and places it in the requirement slot.
      * This determines what item the player needs to submit for the current tier.
      */
-    public void doReroll() {
+    public void doReroll(boolean playsound) {
         if (level == null || level.isClientSide()) {
             return;
         }
@@ -323,14 +310,16 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         setChanged();
         level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
 
-        level.playSound(
-                null,
-                worldPosition,
-                ModSounds.getRandomRerollSound(),
-                SoundSource.BLOCKS,
-                1.0F,
-                1.0F
-        );
+        if (playsound) {
+            level.playSound(
+                    null,
+                    worldPosition,
+                    ModSounds.getRandomRerollSound(),
+                    SoundSource.BLOCKS,
+                    1.0F,
+                    1.0F
+            );
+        }
     }
 
     /**
@@ -351,7 +340,7 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         }
 
         lastRerollGameTime = now;
-        doReroll();
+        doReroll(true);
         return true;
     }
 
@@ -473,7 +462,7 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         }
 
         incrementTierCompletions(this.selectedTier);
-        doReroll();
+        doReroll(false);
 
         setChanged();
         level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), BLOCK_UPDATE_FLAGS);
@@ -756,24 +745,12 @@ public class PlushBlockEntity extends BlockEntity implements MenuProvider {
         CompoundTag tag = new CompoundTag();
         saveAdditional(tag, registries);
 
-        if (level != null && !level.isClientSide()) {
-            TetoMod.LOGGER.info(
-                    "[SERVER-PlushBE.getUpdateTag] pos={} selectedTier={} cachedRewardsKeys={}",
-                    this.worldPosition, this.selectedTier, this.cachedRewards.keySet()
-            );
-        }
-
         return tag;
     }
 
     @Override
     public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
         loadAdditional(tag, registries);
-
-        TetoMod.LOGGER.info(
-                "[CLIENT-PlushBE.handleUpdateTag] pos={} nbtTier={} be.selectedTier(afterLoad)={}",
-                this.worldPosition, tag.contains(NBT_SELECTED_TIER) ? tag.getInt(NBT_SELECTED_TIER) : -1, this.selectedTier
-        );
     }
 
     @Override
